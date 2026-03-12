@@ -20,6 +20,7 @@ const repairSchema = new mongoose.Schema({
   },
   estimatedCost: { type: Number },
   notes: { type: String },
+  image: { type: String },
 }, {
   timestamps: true,
 });
