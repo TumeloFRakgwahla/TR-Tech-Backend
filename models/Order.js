@@ -3,10 +3,10 @@ const mongoose = require('mongoose');
 const orderItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-    required: true
+    ref: 'Product'
   },
   name: String,
+  condition: String,
   price: Number,
   quantity: {
     type: Number,
@@ -32,7 +32,12 @@ const orderSchema = new mongoose.Schema({
       type: String,
       required: [true, 'Customer phone is required']
     },
-    address: String
+    address: {
+      street: String,
+      city: String,
+      postalCode: String,
+      province: String
+    }
   },
   items: [orderItemSchema],
   totalAmount: {
@@ -47,7 +52,7 @@ const orderSchema = new mongoose.Schema({
   },
   paymentMethod: {
     type: String,
-    enum: ['Cash', 'Card', 'Transfer', 'Other'],
+    enum: ['Cash', 'Card', 'Transfer', 'Other', 'WhatsApp'],
     default: 'Cash'
   },
   paymentStatus: {
