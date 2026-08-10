@@ -2,6 +2,17 @@ const express = require('express');
 const router = express.Router();
 const Product = require('../models/Product');
 
+// Get low stock products
+router.get('/low-stock', async (req, res) => {
+  try {
+    const threshold = parseInt(req.query.threshold) || 10;
+    const products = await Product.find({ stock: { $lte: threshold }, status: 'Active' }).sort({ stock: 1 });
+    res.json({ success: true, count: products.length, data: products });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Get all products
 router.get('/', async (req, res) => {
   try {
@@ -71,6 +82,17 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
     res.json({ success: true, message: 'Product deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+// Get low stock products
+router.get('/low-stock', async (req, res) => {
+  try {
+    const threshold = parseInt(req.query.threshold) || 10;
+    const products = await Product.find({ stock: { $lte: threshold }, status: 'Active' }).sort({ stock: 1 });
+    res.json({ success: true, count: products.length, data: products });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

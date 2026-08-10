@@ -3,6 +3,57 @@ const router = express.Router();
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 
+// Get order stats
+router.get('/stats', async (req, res) => {
+  try {
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const [currentOrders, previousOrders, allOrders] = await Promise.all([
+      Order.find({ createdAt: { $gte: currentMonthStart } }),
+      Order.find({ createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
+      Order.find({})
+    ]);
+
+    const currentRevenue = currentOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const previousRevenue = previousOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+
+    const currentCustomers = new Set(currentOrders.map(o => o.customer?.email).filter(Boolean)).size;
+    const previousCustomers = new Set(previousOrders.map(o => o.customer?.email).filter(Boolean)).size;
+
+    const currentProductsSold = currentOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
+    const previousProductsSold = previousOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
+
+    const totalRevenue = allOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const totalOrders = allOrders.length;
+    const totalCustomers = new Set(allOrders.map(o => o.customer?.email).filter(Boolean)).size;
+    const productsSold = allOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
+
+    const revenueChange = previousRevenue > 0 ? Number(((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1)) : 0;
+    const ordersChange = previousOrders.length > 0 ? Number(((currentOrders.length - previousOrders.length) / previousOrders.length * 100).toFixed(1)) : 0;
+    const customersChange = previousCustomers > 0 ? Number(((currentCustomers - previousCustomers) / previousCustomers * 100).toFixed(1)) : 0;
+    const salesChange = previousProductsSold > 0 ? Number(((currentProductsSold - previousProductsSold) / previousProductsSold * 100).toFixed(1)) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        totalRevenue,
+        totalOrders,
+        totalCustomers,
+        productsSold,
+        revenueChange,
+        ordersChange,
+        customersChange,
+        salesChange
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 // Get all orders
 router.get('/', async (req, res) => {
   try {
@@ -84,6 +135,57 @@ router.put('/:id', async (req, res) => {
     res.json({ success: true, data: order });
   } catch (error) {
     res.status(400).json({ success: false, message: error.message });
+  }
+});
+
+// Get order stats
+router.get('/stats', async (req, res) => {
+  try {
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+    const [currentOrders, previousOrders, allOrders] = await Promise.all([
+      Order.find({ createdAt: { $gte: currentMonthStart } }),
+      Order.find({ createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
+      Order.find({})
+    ]);
+
+    const currentRevenue = currentOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const previousRevenue = previousOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+
+    const currentCustomers = new Set(currentOrders.map(o => o.customer?.email).filter(Boolean)).size;
+    const previousCustomers = new Set(previousOrders.map(o => o.customer?.email).filter(Boolean)).size;
+
+    const currentProductsSold = currentOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
+    const previousProductsSold = previousOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
+
+    const totalRevenue = allOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const totalOrders = allOrders.length;
+    const totalCustomers = new Set(allOrders.map(o => o.customer?.email).filter(Boolean)).size;
+    const productsSold = allOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
+
+    const revenueChange = previousRevenue > 0 ? Number(((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1)) : 0;
+    const ordersChange = previousOrders.length > 0 ? Number(((currentOrders.length - previousOrders.length) / previousOrders.length * 100).toFixed(1)) : 0;
+    const customersChange = previousCustomers > 0 ? Number(((currentCustomers - previousCustomers) / previousCustomers * 100).toFixed(1)) : 0;
+    const salesChange = previousProductsSold > 0 ? Number(((currentProductsSold - previousProductsSold) / previousProductsSold * 100).toFixed(1)) : 0;
+
+    res.json({
+      success: true,
+      data: {
+        totalRevenue,
+        totalOrders,
+        totalCustomers,
+        productsSold,
+        revenueChange,
+        ordersChange,
+        customersChange,
+        salesChange
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 });
 
