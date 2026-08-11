@@ -56,9 +56,15 @@ router.post('/register', [
     // Generate token
     const token = generateToken(user._id);
 
+    res.cookie('authToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
     res.status(201).json({
       success: true,
-      token,
       user: {
         id: user._id,
         firstName: user.firstName,
@@ -125,9 +131,15 @@ router.post('/login', [
     // Generate token
     const token = generateToken(user._id);
 
+    res.cookie('authToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
+
     res.json({
       success: true,
-      token,
       user: {
         id: user._id,
         firstName: user.firstName,
@@ -151,7 +163,7 @@ router.post('/login', [
 // @access  Private
 router.get('/me', async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = req.cookies?.authToken;
     if (!token) {
       return res.status(401).json({
         success: false,
@@ -190,12 +202,24 @@ router.get('/me', async (req, res) => {
   }
 });
 
+// @route   POST /api/auth/logout
+// @desc    Logout user
+// @access  Public
+router.post('/logout', (req, res) => {
+  res.clearCookie('authToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  });
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
 // @route   PUT /api/auth/updateprofile
 // @desc    Update user profile
 // @access  Private
 router.put('/updateprofile', async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const token = req.cookies?.authToken;
     if (!token) {
       return res.status(401).json({
         success: false,

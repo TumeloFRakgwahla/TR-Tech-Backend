@@ -44,9 +44,14 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { status, notes, estimatedCost } = req.body;
+    const updateData = {};
+    if (status !== undefined) updateData.status = status;
+    if (notes !== undefined) updateData.notes = notes;
+    if (estimatedCost !== undefined) updateData.estimatedCost = estimatedCost;
+
     const repair = await Repair.findByIdAndUpdate(
       req.params.id,
-      { status, notes, estimatedCost },
+      updateData,
       { new: true }
     );
 
