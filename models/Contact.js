@@ -31,7 +31,11 @@ const contactSchema = new mongoose.Schema({
     default: 'New'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { key: { status: 1 } },
+    { key: { createdAt: -1 } }
+  ]
 });
 
 module.exports = mongoose.model('Contact', contactSchema);

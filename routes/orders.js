@@ -1,10 +1,34 @@
 const express = require('express');
 const router = express.Router();
+const { body, validationResult } = require('express-validator');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const { authenticate, authorize } = require('../middleware/auth');
 
-// Get order stats
-router.get('/stats', async (req, res) => {
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+  next();
+};
+
+const orderItemValidation = [
+  body('items').isArray({ min: 1 }).withMessage('Order must contain at least one item'),
+  body('items.*.product').notEmpty().withMessage('Product ID is required for each item'),
+  body('items.*.quantity').isInt({ min: 1 }).withMessage('Quantity must be at least 1'),
+  body('customer.name').trim().notEmpty().withMessage('Customer name is required'),
+  body('customer.email').isEmail().withMessage('Valid customer email is required').normalizeEmail(),
+  body('customer.phone').trim().notEmpty().withMessage('Customer phone is required'),
+  body('totalAmount').isFloat({ min: 0 }).withMessage('Total amount must be a positive number')
+];
+
+const orderUpdateValidation = [
+  body('status').optional().isIn(['Pending', 'Processing', 'Shipped', 'Delivered', 'Completed', 'Cancelled']).withMessage('Invalid status'),
+  body('paymentStatus').optional().isIn(['Pending', 'Paid', 'Refunded']).withMessage('Invalid payment status')
+];
+
+router.get('/stats', authenticate, authorize('admin'), async (req, res) => {
   try {
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -54,23 +78,37 @@ router.get('/stats', async (req, res) => {
   }
 });
 
-// Get all orders
-router.get('/', async (req, res) => {
+router.get('/', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { status } = req.query;
+    const { status, page = 1, limit = 20 } = req.query;
     let query = {};
 
     if (status) query.status = status;
 
-    const orders = await Order.find(query).populate('items.product').sort({ createdAt: -1 });
-    res.json({ success: true, count: orders.length, data: orders });
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [orders, total] = await Promise.all([
+      Order.find(query).populate('items.product').sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+      Order.countDocuments(query)
+    ]);
+
+    res.json({
+      success: true,
+      count: orders.length,
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+      data: orders
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 });
 
-// Get single order
-router.get('/:id', async (req, res) => {
+router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
     const order = await Order.findById(req.params.id).populate('items.product');
     if (!order) {
@@ -82,23 +120,29 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-// Create order
-router.post('/', async (req, res) => {
+router.post('/', orderItemValidation, validate, async (req, res) => {
   try {
     const { items, customer, totalAmount, paymentMethod, status, paymentStatus, notes } = req.body;
 
-    // Update product stock
     for (const item of items) {
-      const product = await Product.findById(item.product);
-      if (product) {
-        product.stock -= item.quantity;
-        if (product.stock < 0) {
+      const updatedProduct = await Product.findOneAndUpdate(
+        { _id: item.product, stock: { $gte: item.quantity } },
+        { $inc: { stock: -item.quantity } },
+        { new: true }
+      );
+
+      if (!updatedProduct) {
+        const product = await Product.findById(item.product);
+        if (!product) {
           return res.status(400).json({
             success: false,
-            message: `Insufficient stock for ${product.name}`
+            message: `Product ${item.product} not found`
           });
         }
-        await product.save();
+        return res.status(400).json({
+          success: false,
+          message: `Insufficient stock for ${product.name}`
+        });
       }
     }
 
@@ -107,8 +151,8 @@ router.post('/', async (req, res) => {
       customer,
       totalAmount,
       paymentMethod,
-      status,
-      paymentStatus,
+      status: status || 'Pending',
+      paymentStatus: paymentStatus || 'Pending',
       notes
     });
 
@@ -118,13 +162,17 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Update order status
-router.put('/:id', async (req, res) => {
+router.put('/:id', authenticate, authorize('admin'), orderUpdateValidation, validate, async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, paymentStatus, notes } = req.body;
+    const updateData = {};
+    if (status !== undefined) updateData.status = status;
+    if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus;
+    if (notes !== undefined) updateData.notes = notes;
+
     const order = await Order.findByIdAndUpdate(
       req.params.id,
-      { status },
+      updateData,
       { new: true }
     ).populate('items.product');
 
@@ -138,59 +186,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-// Get order stats
-router.get('/stats', async (req, res) => {
-  try {
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
-
-    const [currentOrders, previousOrders, allOrders] = await Promise.all([
-      Order.find({ createdAt: { $gte: currentMonthStart } }),
-      Order.find({ createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
-      Order.find({})
-    ]);
-
-    const currentRevenue = currentOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-    const previousRevenue = previousOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-
-    const currentCustomers = new Set(currentOrders.map(o => o.customer?.email).filter(Boolean)).size;
-    const previousCustomers = new Set(previousOrders.map(o => o.customer?.email).filter(Boolean)).size;
-
-    const currentProductsSold = currentOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
-    const previousProductsSold = previousOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
-
-    const totalRevenue = allOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-    const totalOrders = allOrders.length;
-    const totalCustomers = new Set(allOrders.map(o => o.customer?.email).filter(Boolean)).size;
-    const productsSold = allOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
-
-    const revenueChange = previousRevenue > 0 ? Number(((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1)) : 0;
-    const ordersChange = previousOrders.length > 0 ? Number(((currentOrders.length - previousOrders.length) / previousOrders.length * 100).toFixed(1)) : 0;
-    const customersChange = previousCustomers > 0 ? Number(((currentCustomers - previousCustomers) / previousCustomers * 100).toFixed(1)) : 0;
-    const salesChange = previousProductsSold > 0 ? Number(((currentProductsSold - previousProductsSold) / previousProductsSold * 100).toFixed(1)) : 0;
-
-    res.json({
-      success: true,
-      data: {
-        totalRevenue,
-        totalOrders,
-        totalCustomers,
-        productsSold,
-        revenueChange,
-        ordersChange,
-        customersChange,
-        salesChange
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-});
-
-// Delete order
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
     const order = await Order.findByIdAndDelete(req.params.id);
     if (!order) {

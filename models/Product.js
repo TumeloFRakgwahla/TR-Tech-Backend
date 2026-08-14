@@ -44,7 +44,13 @@ const productSchema = new mongoose.Schema({
     default: 'Active'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { key: { category: 1 } },
+    { key: { status: 1 } },
+    { key: { category: 1, status: 1 } },
+    { key: { name: 'text', description: 'text' } }
+  ]
 });
 
 module.exports = mongoose.model('Product', productSchema);

@@ -3,14 +3,13 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { authenticate, authorize } = require('../middleware/auth');
 
-// Create uploads directory if it doesn't exist
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-// Configure multer storage
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadsDir);
@@ -22,9 +21,9 @@ const storage = multer.diskStorage({
   }
 });
 
-const upload = multer({ 
+const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: function (req, file, cb) {
     const filetypes = /jpeg|jpg|png|gif|webp/;
     const mimetype = filetypes.test(file.mimetype);
@@ -36,16 +35,15 @@ const upload = multer({
   }
 });
 
-// Upload single image
-router.post('/image', upload.single('image'), (req, res) => {
+router.post('/image', authenticate, authorize('admin'), upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
-    
+
     const imageUrl = `/uploads/${req.file.filename}`;
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: 'Image uploaded successfully',
       url: imageUrl,
       filename: req.file.filename
@@ -55,12 +53,11 @@ router.post('/image', upload.single('image'), (req, res) => {
   }
 });
 
-// Delete image
-router.delete('/image/:filename', (req, res) => {
+router.delete('/image/:filename', authenticate, authorize('admin'), (req, res) => {
   try {
     const filename = req.params.filename;
     const filePath = path.join(uploadsDir, filename);
-    
+
     if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
       res.json({ success: true, message: 'Image deleted successfully' });
