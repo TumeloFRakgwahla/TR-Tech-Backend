@@ -1,6 +1,6 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
-const { generateToken, verifyToken } = require('../utils/jwt');
+const { generateToken } = require('../utils/jwt');
 const User = require('../models/User');
 const { authenticate } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');

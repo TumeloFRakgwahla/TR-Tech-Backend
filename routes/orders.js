@@ -28,6 +28,27 @@ const orderUpdateValidation = [
   body('paymentStatus').optional().isIn(['Pending', 'Paid', 'Refunded']).withMessage('Invalid payment status')
 ];
 
+const buildStatsPipeline = (matchStage) => [
+  { $match: matchStage },
+  { $unwind: { path: '$items', preserveNullAndEmptyArrays: true } },
+  {
+    $group: {
+      _id: null,
+      revenue: { $sum: { $ifNull: ['$totalAmount', 0] } },
+      customers: { $addToSet: '$customer.email' },
+      productsSold: { $sum: { $ifNull: ['$items.quantity', 0] } },
+    },
+  },
+  {
+    $project: {
+      _id: 0,
+      revenue: 1,
+      customers: { $size: { $setDifference: ['$customers', [null, '']] } },
+      productsSold: 1,
+    },
+  },
+];
+
 router.get('/stats', authenticate, authorize('admin'), async (req, res) => {
   try {
     const now = new Date();
@@ -35,28 +56,28 @@ router.get('/stats', authenticate, authorize('admin'), async (req, res) => {
     const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-    const [currentOrders, previousOrders, allOrders] = await Promise.all([
-      Order.find({ createdAt: { $gte: currentMonthStart } }),
-      Order.find({ createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
-      Order.find({})
+    const [currentStats, previousStats, allStats, currentOrderCount, previousOrderCount] = await Promise.all([
+      Order.aggregate(buildStatsPipeline({ createdAt: { $gte: currentMonthStart } })),
+      Order.aggregate(buildStatsPipeline({ createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } })),
+      Order.aggregate(buildStatsPipeline({})),
+      Order.countDocuments({ createdAt: { $gte: currentMonthStart } }),
+      Order.countDocuments({ createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
     ]);
 
-    const currentRevenue = currentOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-    const previousRevenue = previousOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
+    const currentRevenue = currentStats[0]?.revenue || 0;
+    const previousRevenue = previousStats[0]?.revenue || 0;
+    const currentCustomers = currentStats[0]?.customers || 0;
+    const previousCustomers = previousStats[0]?.customers || 0;
+    const currentProductsSold = currentStats[0]?.productsSold || 0;
+    const previousProductsSold = previousStats[0]?.productsSold || 0;
 
-    const currentCustomers = new Set(currentOrders.map(o => o.customer?.email).filter(Boolean)).size;
-    const previousCustomers = new Set(previousOrders.map(o => o.customer?.email).filter(Boolean)).size;
-
-    const currentProductsSold = currentOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
-    const previousProductsSold = previousOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
-
-    const totalRevenue = allOrders.reduce((sum, order) => sum + Number(order.totalAmount || 0), 0);
-    const totalOrders = allOrders.length;
-    const totalCustomers = new Set(allOrders.map(o => o.customer?.email).filter(Boolean)).size;
-    const productsSold = allOrders.reduce((sum, order) => sum + order.items.reduce((s, item) => s + Number(item.quantity || 0), 0), 0);
+    const totalRevenue = allStats[0]?.revenue || 0;
+    const totalOrders = await Order.countDocuments({});
+    const totalCustomers = allStats[0]?.customers || 0;
+    const productsSold = allStats[0]?.productsSold || 0;
 
     const revenueChange = previousRevenue > 0 ? Number(((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1)) : 0;
-    const ordersChange = previousOrders.length > 0 ? Number(((currentOrders.length - previousOrders.length) / previousOrders.length * 100).toFixed(1)) : 0;
+    const ordersChange = previousOrderCount > 0 ? Number(((currentOrderCount - previousOrderCount) / previousOrderCount * 100).toFixed(1)) : 0;
     const customersChange = previousCustomers > 0 ? Number(((currentCustomers - previousCustomers) / previousCustomers * 100).toFixed(1)) : 0;
     const salesChange = previousProductsSold > 0 ? Number(((currentProductsSold - previousProductsSold) / previousProductsSold * 100).toFixed(1)) : 0;
 
@@ -70,8 +91,8 @@ router.get('/stats', authenticate, authorize('admin'), async (req, res) => {
         revenueChange,
         ordersChange,
         customersChange,
-        salesChange
-      }
+        salesChange,
+      },
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
