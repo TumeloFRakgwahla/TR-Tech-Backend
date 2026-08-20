@@ -49,7 +49,12 @@ const userSchema = new mongoose.Schema({
     default: true
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { key: { email: 1 } },
+    { key: { role: 1 } },
+    { key: { createdAt: -1 } }
+  ]
 });
 
 // Hash password before saving

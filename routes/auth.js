@@ -1,40 +1,32 @@
 const express = require('express');
-const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
+const { generateToken } = require('../utils/jwt');
 const User = require('../models/User');
+const { authenticate } = require('../middleware/auth');
+const { createAuthLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
 
-// Generate JWT Token
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET || 'tr-tech-secret-key', {
-    expiresIn: '30d'
-  });
+const authLimiter = createAuthLimiter();
+
+const validate = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ success: false, errors: errors.array() });
+  }
+  next();
 };
 
-// @route   POST /api/auth/register
-// @desc    Register a new user
-// @access  Public
-router.post('/register', [
-  body('firstName').trim().notEmpty().withMessage('First name is required'),
-  body('lastName').trim().notEmpty().withMessage('Last name is required'),
-  body('email').isEmail().withMessage('Please enter a valid email'),
-  body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+router.post('/register', authLimiter, [
+  body('firstName').trim().notEmpty().withMessage('First name is required').isLength({ max: 50 }).withMessage('First name cannot exceed 50 characters'),
+  body('lastName').trim().notEmpty().withMessage('Last name is required').isLength({ max: 50 }).withMessage('Last name cannot exceed 50 characters'),
+  body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
+  body('password').isLength({ min: 8 }).withMessage('Password must be at least 8 characters'),
   body('phone').trim().notEmpty().withMessage('Phone number is required')
-], async (req, res) => {
+], validate, async (req, res) => {
   try {
-    // Check for validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array()
-      });
-    }
-
     const { firstName, lastName, email, password, phone, address } = req.body;
 
-    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -43,7 +35,6 @@ router.post('/register', [
       });
     }
 
-    // Create user
     const user = await User.create({
       firstName,
       lastName,
@@ -53,12 +44,17 @@ router.post('/register', [
       address: address || {}
     });
 
-    // Generate token
     const token = generateToken(user._id);
+
+    res.cookie('authToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
 
     res.status(201).json({
       success: true,
-      token,
       user: {
         id: user._id,
         firstName: user.firstName,
@@ -77,26 +73,13 @@ router.post('/register', [
   }
 });
 
-// @route   POST /api/auth/login
-// @desc    Login user
-// @access  Public
-router.post('/login', [
-  body('email').isEmail().withMessage('Please enter a valid email'),
+router.post('/login', authLimiter, [
+  body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
   body('password').notEmpty().withMessage('Password is required')
-], async (req, res) => {
+], validate, async (req, res) => {
   try {
-    // Check for validation errors
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        errors: errors.array()
-      });
-    }
-
     const { email, password } = req.body;
 
-    // Find user and include password for comparison
     const user = await User.findOne({ email }).select('+password');
     if (!user) {
       return res.status(401).json({
@@ -105,7 +88,6 @@ router.post('/login', [
       });
     }
 
-    // Check password
     const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       return res.status(401).json({
@@ -114,7 +96,6 @@ router.post('/login', [
       });
     }
 
-    // Check if user is active
     if (!user.isActive) {
       return res.status(401).json({
         success: false,
@@ -122,12 +103,17 @@ router.post('/login', [
       });
     }
 
-    // Generate token
     const token = generateToken(user._id);
+
+    res.cookie('authToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+    });
 
     res.json({
       success: true,
-      token,
       user: {
         id: user._id,
         firstName: user.firstName,
@@ -146,92 +132,56 @@ router.post('/login', [
   }
 });
 
-// @route   GET /api/auth/me
-// @desc    Get current user
-// @access  Private
-router.get('/me', async (req, res) => {
-  try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
+router.get('/me', authenticate, async (req, res) => {
+  res.json({
+    success: true,
+    user: {
+      id: req.user._id,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      email: req.user.email,
+      phone: req.user.phone,
+      address: req.user.address,
+      role: req.user.role
     }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tr-tech-secret-key');
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        phone: user.phone,
-        address: user.address,
-        role: user.role
-      }
-    });
-  } catch (error) {
-    console.error('Auth check error:', error);
-    res.status(401).json({
-      success: false,
-      message: 'Invalid token'
-    });
-  }
+  });
 });
 
-// @route   PUT /api/auth/updateprofile
-// @desc    Update user profile
-// @access  Private
-router.put('/updateprofile', async (req, res) => {
+router.post('/logout', (req, res) => {
+  res.clearCookie('authToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+  });
+  res.json({ success: true, message: 'Logged out successfully' });
+});
+
+router.put('/updateprofile', authenticate, [
+  body('firstName').optional().trim().notEmpty().withMessage('First name cannot be empty').isLength({ max: 50 }).withMessage('First name cannot exceed 50 characters'),
+  body('lastName').optional().trim().notEmpty().withMessage('Last name cannot be empty').isLength({ max: 50 }).withMessage('Last name cannot exceed 50 characters'),
+  body('phone').optional().trim().notEmpty().withMessage('Phone number cannot be empty'),
+  body('address').optional().isObject().withMessage('Address must be an object')
+], validate, async (req, res) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
-    if (!token) {
-      return res.status(401).json({
-        success: false,
-        message: 'No token provided'
-      });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'tr-tech-secret-key');
-    const user = await User.findById(decoded.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found'
-      });
-    }
-
     const { firstName, lastName, phone, address } = req.body;
 
-    if (firstName) user.firstName = firstName;
-    if (lastName) user.lastName = lastName;
-    if (phone) user.phone = phone;
-    if (address) user.address = address;
+    if (firstName) req.user.firstName = firstName;
+    if (lastName) req.user.lastName = lastName;
+    if (phone) req.user.phone = phone;
+    if (address) req.user.address = address;
 
-    await user.save();
+    await req.user.save();
 
     res.json({
       success: true,
       user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        phone: user.phone,
-        address: user.address,
-        role: user.role
+        id: req.user._id,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        email: req.user.email,
+        phone: req.user.phone,
+        address: req.user.address,
+        role: req.user.role
       }
     });
   } catch (error) {

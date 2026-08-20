@@ -15,7 +15,8 @@ const productSchema = new mongoose.Schema({
   category: {
     type: String,
     required: [true, 'Category is required'],
-    enum: ['Accessories', 'Parts', 'Tools', 'Other']
+    enum: ['Smartphones', 'Laptops', 'Laptop Accessories', 'Mobile Accessories', 'Gaming', 'Networking', 'Printers', 'Storage Devices', 'Other'],
+    default: 'Other'
   },
   price: {
     type: Number,
@@ -43,7 +44,13 @@ const productSchema = new mongoose.Schema({
     default: 'Active'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { key: { category: 1 } },
+    { key: { status: 1 } },
+    { key: { category: 1, status: 1 } },
+    { key: { name: 'text', description: 'text' } }
+  ]
 });
 
 module.exports = mongoose.model('Product', productSchema);

@@ -30,13 +30,26 @@ const serviceSchema = new mongoose.Schema({
     type: String,
     default: 'https://via.placeholder.com/100'
   },
+  icon: {
+    type: String,
+    default: 'Wrench'
+  },
+  features: {
+    type: [String],
+    default: []
+  },
   status: {
     type: String,
     enum: ['Active', 'Inactive'],
     default: 'Active'
   }
 }, {
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { key: { category: 1 } },
+    { key: { status: 1 } },
+    { key: { category: 1, status: 1 } }
+  ]
 });
 
 module.exports = mongoose.model('Service', serviceSchema);

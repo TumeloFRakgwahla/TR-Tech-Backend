@@ -23,6 +23,10 @@ const repairSchema = new mongoose.Schema({
   image: { type: String },
 }, {
   timestamps: true,
+  indexes: [
+    { key: { status: 1 } },
+    { key: { createdAt: -1 } }
+  ]
 });
 
 module.exports = mongoose.model('Repair', repairSchema);

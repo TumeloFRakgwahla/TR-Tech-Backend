@@ -62,7 +62,13 @@ const orderSchema = new mongoose.Schema({
   },
   notes: String
 }, {
-  timestamps: true
+  timestamps: true,
+  indexes: [
+    { key: { status: 1 } },
+    { key: { createdAt: -1 } },
+    { key: { 'customer.email': 1 } },
+    { key: { status: 1, createdAt: -1 } }
+  ]
 });
 
 module.exports = mongoose.model('Order', orderSchema);
