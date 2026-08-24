@@ -1,4 +1,5 @@
 const express = require('express');
+const { serverError } = require('../utils/response');
 const router = express.Router();
 const Wishlist = require('../models/Wishlist');
 const { authenticate } = require('../middleware/auth');
@@ -11,7 +12,7 @@ router.get('/', authenticate, async (req, res) => {
     }
     res.json({ success: true, data: wishlist.products });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
@@ -23,7 +24,7 @@ router.get('/check/:productId', authenticate, async (req, res) => {
       : false;
     res.json({ success: true, inWishlist });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
@@ -34,14 +35,14 @@ router.post('/:productId', authenticate, async (req, res) => {
       wishlist = new Wishlist({ user: req.user._id, products: [] });
     }
 
-    if (!wishlist.products.includes(req.params.productId)) {
+    if (!wishlist.products.some((p) => p.toString() === req.params.productId)) {
       wishlist.products.push(req.params.productId);
       await wishlist.save();
     }
 
     res.json({ success: true, message: 'Added to wishlist' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
@@ -59,7 +60,7 @@ router.delete('/:productId', authenticate, async (req, res) => {
 
     res.json({ success: true, message: 'Removed from wishlist' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 

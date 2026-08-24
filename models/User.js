@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 
 const userSchema = new mongoose.Schema({
   firstName: {
@@ -25,7 +26,7 @@ const userSchema = new mongoose.Schema({
   password: {
     type: String,
     required: [true, 'Password is required'],
-    minlength: [6, 'Password must be at least 6 characters'],
+    minlength: [8, 'Password must be at least 8 characters'],
     select: false
   },
   phone: {
@@ -47,6 +48,30 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerificationToken: String,
+  emailVerificationExpires: Date,
+  failedLoginAttempts: {
+    type: Number,
+    default: 0
+  },
+  lockUntil: {
+    type: Date,
+    default: null
+  },
+  notificationPreferences: {
+    emailOrderUpdates: { type: Boolean, default: true },
+    emailPromotions: { type: Boolean, default: true },
+    emailNewsletter: { type: Boolean, default: false },
+    smsOrderUpdates: { type: Boolean, default: true },
+    smsPromotions: { type: Boolean, default: false },
+    whatsappUpdates: { type: Boolean, default: true },
+    pushNotifications: { type: Boolean, default: false },
+    frequency: { type: String, default: 'instant', enum: ['instant', 'daily', 'weekly'] }
   }
 }, {
   timestamps: true,
@@ -60,7 +85,7 @@ const userSchema = new mongoose.Schema({
 // Hash password before saving
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {
-    next();
+    return next();
   }
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
@@ -76,6 +101,20 @@ userSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.password;
   return user;
+};
+
+// True when the account is temporarily locked from failed logins.
+userSchema.methods.isLocked = function() {
+  return !!(this.lockUntil && this.lockUntil > Date.now());
+};
+
+// Generate a single-use email verification token (raw returned to caller for emailing;
+// only the SHA-256 hash is persisted).
+userSchema.methods.generateEmailVerificationToken = function() {
+  const token = crypto.randomBytes(32).toString('hex');
+  this.emailVerificationToken = crypto.createHash('sha256').update(token).digest('hex');
+  this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
+  return token;
 };
 
 module.exports = mongoose.model('User', userSchema);

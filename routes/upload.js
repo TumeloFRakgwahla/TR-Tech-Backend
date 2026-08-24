@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { authenticate, authorize } = require('../middleware/auth');
+const { serverError } = require('../utils/response');
 
 const uploadsDir = path.join(__dirname, '../uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -49,23 +50,47 @@ router.post('/image', authenticate, authorize('admin'), upload.single('image'), 
       filename: req.file.filename
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
+  }
+});
+
+router.post('/images', authenticate, authorize('admin'), upload.array('images', 10), (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No files uploaded' });
+    }
+
+    const data = req.files.map((file) => ({
+      url: `/uploads/${file.filename}`,
+      filename: file.filename,
+    }));
+    res.status(201).json({ success: true, message: 'Images uploaded successfully', data });
+  } catch (error) {
+    serverError(res, error);
   }
 });
 
 router.delete('/image/:filename', authenticate, authorize('admin'), (req, res) => {
   try {
     const filename = req.params.filename;
-    const filePath = path.join(uploadsDir, filename);
+    if (typeof filename !== 'string' || !/^[\w.-]+$/.test(filename) || filename === '.' || filename === '..') {
+      return res.status(400).json({ success: false, message: 'Invalid filename' });
+    }
 
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+    const resolved = path.resolve(uploadsDir, filename);
+    const uploadsRoot = path.join(uploadsDir, path.sep);
+    if (resolved !== path.join(uploadsDir, filename) || !resolved.startsWith(uploadsRoot)) {
+      return res.status(400).json({ success: false, message: 'Invalid filename' });
+    }
+
+    if (fs.existsSync(resolved)) {
+      fs.unlinkSync(resolved);
       res.json({ success: true, message: 'Image deleted successfully' });
     } else {
       res.status(404).json({ success: false, message: 'Image not found' });
     }
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 

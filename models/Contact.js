@@ -34,6 +34,7 @@ const contactSchema = new mongoose.Schema({
   timestamps: true,
   indexes: [
     { key: { status: 1 } },
+    { key: { email: 1 } },
     { key: { createdAt: -1 } }
   ]
 });

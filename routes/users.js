@@ -1,16 +1,13 @@
 const express = require('express');
+const { serverError, badRequest } = require('../utils/response');
+const { sendPaginated } = require('../utils/pagination');
 const router = express.Router();
-const { body, validationResult } = require('express-validator');
+const { body } = require('express-validator');
+const validate = require('../middleware/validate');
 const User = require('../models/User');
+const Session = require('../models/Session');
 const { authenticate, authorize } = require('../middleware/auth');
-
-const validate = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ success: false, errors: errors.array() });
-  }
-  next();
-};
+const { toSafeString, escapeRegex } = require('../utils/query');
 
 const userValidation = [
   body('firstName').optional().trim().notEmpty().withMessage('First name cannot be empty').isLength({ max: 50 }).withMessage('First name cannot exceed 50 characters'),
@@ -20,19 +17,29 @@ const userValidation = [
   body('role').optional().isIn(['customer', 'admin']).withMessage('Invalid role')
 ];
 
+const passwordResetValidation = [
+  body('password')
+    .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+    .matches(/^(?=.*[a-zA-Z])(?=.*\d).+$/).withMessage('Password must contain both letters and numbers'),
+];
+
 router.get('/', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { role, search, page = 1, limit = 20 } = req.query;
-    let query = {};
+  const { page = 1, limit = 20 } = req.query;
+  let query = {};
 
-    if (role) query.role = role;
-    if (search) {
-      query.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
-    }
+  const role = toSafeString(req.query.role);
+  const search = toSafeString(req.query.search);
+
+  if (role) query.role = role;
+  if (search) {
+    const safeSearch = escapeRegex(search);
+    query.$or = [
+      { firstName: { $regex: safeSearch, $options: 'i' } },
+      { lastName: { $regex: safeSearch, $options: 'i' } },
+      { email: { $regex: safeSearch, $options: 'i' } }
+    ];
+  }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
@@ -43,17 +50,9 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
       User.countDocuments(query)
     ]);
 
-    res.json({
-      success: true,
-      count: users.length,
-      total,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil(total / limitNum),
-      data: users
-    });
+    sendPaginated(res, users, total, pageNum, limitNum);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
@@ -65,13 +64,16 @@ router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
     }
     res.json({ success: true, data: user });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
 router.put('/:id', authenticate, authorize('admin'), userValidation, validate, async (req, res) => {
   try {
-    const user = await User.findByIdAndUpdate(req.params.id, req.body, {
+    // Strip password from mass-assignment: findByIdAndUpdate does not run the
+    // pre('save') hook, so a plaintext password in the body would be stored as-is.
+    const { password, ...updateData } = req.body;
+    const user = await User.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true
     }).select('-password');
@@ -81,7 +83,28 @@ router.put('/:id', authenticate, authorize('admin'), userValidation, validate, a
     }
     res.json({ success: true, data: user });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    badRequest(res, error);
+  }
+});
+
+router.put('/:id/password', authenticate, authorize('admin'), passwordResetValidation, validate, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    // Set via the document instance and save() so the pre('save') hook hashes it.
+    // (findByIdAndUpdate would skip the hook and store the password in cleartext.)
+    user.password = req.body.password;
+    await user.save();
+
+    // Invalidate existing sessions so a compromised/old session cannot persist.
+    await Session.updateMany({ userId: user._id }, { isActive: false });
+
+    res.json({ success: true, message: 'Password updated successfully' });
+  } catch (error) {
+    serverError(res, error);
   }
 });
 
@@ -93,7 +116,7 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
     }
     res.json({ success: true, message: 'User deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 

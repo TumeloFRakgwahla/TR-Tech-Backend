@@ -1,16 +1,15 @@
 const express = require('express');
+const { serverError, badRequest } = require('../utils/response');
+const { sendPaginated } = require('../utils/pagination');
 const router = express.Router();
-const { body, validationResult } = require('express-validator');
+const { body } = require('express-validator');
+const validate = require('../middleware/validate');
 const Contact = require('../models/Contact');
 const { authenticate, authorize } = require('../middleware/auth');
+const { toSafeString } = require('../utils/query');
+const { createPublicLimiter } = require('../middleware/rateLimiter');
 
-const validate = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ success: false, errors: errors.array() });
-  }
-  next();
-};
+const contactLimiter = createPublicLimiter();
 
 const contactValidation = [
   body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
@@ -20,18 +19,18 @@ const contactValidation = [
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 1000 }).withMessage('Message cannot exceed 1000 characters')
 ];
 
-router.post('/', contactValidation, validate, async (req, res) => {
+router.post('/', contactLimiter, contactValidation, validate, async (req, res) => {
   try {
     const contact = await Contact.create(req.body);
     res.status(201).json({ success: true, data: contact });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    badRequest(res, error);
   }
 });
 
 router.get('/', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { status } = req.query;
+    const status = toSafeString(req.query.status);
     let query = {};
 
     if (status) query.status = status;
@@ -45,17 +44,9 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
       Contact.countDocuments(query)
     ]);
 
-    res.json({
-      success: true,
-      count: contacts.length,
-      total,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil(total / limitNum),
-      data: contacts
-    });
+    sendPaginated(res, contacts, total, pageNum, limitNum);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
@@ -67,7 +58,7 @@ router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
     }
     res.json({ success: true, data: contact });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
@@ -100,7 +91,7 @@ router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
     }
     res.json({ success: true, message: 'Contact deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 

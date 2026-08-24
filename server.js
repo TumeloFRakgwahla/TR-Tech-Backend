@@ -1,4 +1,6 @@
 require('dotenv').config();
+const { parseEnv } = require('./config/env');
+parseEnv();
 const connectDB = require('./config/db');
 const app = require('./app');
 

@@ -5,10 +5,8 @@ const User = require('../models/User');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
 
-const generateToken = (id) => {
-  const jwt = require('jsonwebtoken');
-  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-};
+const { createToken } = require('./helpers/createToken');
+const generateToken = createToken;
 
 describe('Orders', () => {
   let adminToken;
@@ -23,7 +21,7 @@ describe('Orders', () => {
       phone: '1234567890',
       role: 'admin',
     });
-    adminToken = generateToken(admin._id);
+    adminToken = await generateToken(admin._id);
 
     const product = await Product.create({
       name: 'Test Product',
@@ -43,7 +41,7 @@ describe('Orders', () => {
     await Order.deleteMany({});
   });
 
-  describe('GET /api/orders/stats', () => {
+  describe('GET /api/v1/orders/stats', () => {
     it('should return stats as admin', async () => {
       await Order.create({
         items: [{ product: productId, name: 'Test', condition: 'New', price: 999, quantity: 2 }],
@@ -54,7 +52,7 @@ describe('Orders', () => {
       });
 
       const res = await request(app)
-        .get('/api/orders/stats')
+        .get('/api/v1/orders/stats')
         .set('Cookie', `authToken=${adminToken}`);
 
       expect(res.statusCode).toEqual(200);
@@ -64,13 +62,13 @@ describe('Orders', () => {
     });
 
     it('should fail without auth', async () => {
-      const res = await request(app).get('/api/orders/stats');
+      const res = await request(app).get('/api/v1/orders/stats');
       expect(res.statusCode).toEqual(401);
       expect(res.body.success).toBe(false);
     });
   });
 
-  describe('GET /api/orders', () => {
+  describe('GET /api/v1/orders', () => {
     beforeEach(async () => {
       await Order.create({
         items: [{ product: productId, name: 'Test', condition: 'New', price: 999, quantity: 1 }],
@@ -83,7 +81,7 @@ describe('Orders', () => {
 
     it('should list orders as admin', async () => {
       const res = await request(app)
-        .get('/api/orders')
+        .get('/api/v1/orders')
         .set('Cookie', `authToken=${adminToken}`);
 
       expect(res.statusCode).toEqual(200);
@@ -93,7 +91,7 @@ describe('Orders', () => {
 
     it('should filter orders by status', async () => {
       const res = await request(app)
-        .get('/api/orders?status=Pending')
+        .get('/api/v1/orders?status=Pending')
         .set('Cookie', `authToken=${adminToken}`);
 
       expect(res.statusCode).toEqual(200);
@@ -101,7 +99,7 @@ describe('Orders', () => {
     });
   });
 
-  describe('GET /api/orders/:id', () => {
+  describe('GET /api/v1/orders/:id', () => {
     it('should get order by id', async () => {
       const order = await Order.create({
         items: [{ product: productId, name: 'Test', condition: 'New', price: 999, quantity: 1 }],
@@ -112,7 +110,7 @@ describe('Orders', () => {
       });
 
       const res = await request(app)
-        .get(`/api/orders/${order._id}`)
+        .get(`/api/v1/orders/${order._id}`)
         .set('Cookie', `authToken=${adminToken}`);
 
       expect(res.statusCode).toEqual(200);
@@ -121,14 +119,14 @@ describe('Orders', () => {
 
     it('should return 404 for invalid id', async () => {
       const res = await request(app)
-        .get('/api/orders/60d5ec9af6820b7e3c4b4567')
+        .get('/api/v1/orders/60d5ec9af6820b7e3c4b4567')
         .set('Cookie', `authToken=${adminToken}`);
 
       expect(res.statusCode).toEqual(404);
     });
   });
 
-  describe('POST /api/orders', () => {
+  describe('POST /api/v1/orders', () => {
     it('should create order and reduce stock', async () => {
       const product = await Product.create({
         name: 'Stock Product',
@@ -141,7 +139,7 @@ describe('Orders', () => {
       });
 
       const res = await request(app)
-        .post('/api/orders')
+        .post('/api/v1/orders')
         .send({
           items: [{ product: product._id, quantity: 2 }],
           customer: { name: 'Buyer', email: 'buyer@test.com', phone: '1234567890' },
@@ -168,7 +166,7 @@ describe('Orders', () => {
       });
 
       const res = await request(app)
-        .post('/api/orders')
+        .post('/api/v1/orders')
         .send({
           items: [{ product: product._id, quantity: 5 }],
           customer: { name: 'Buyer', email: 'buyer2@test.com', phone: '1234567890' },
@@ -182,7 +180,7 @@ describe('Orders', () => {
 
     it('should fail validation', async () => {
       const res = await request(app)
-        .post('/api/orders')
+        .post('/api/v1/orders')
         .send({
           items: [],
           customer: { name: '', email: 'invalid', phone: '' },
@@ -194,7 +192,7 @@ describe('Orders', () => {
     });
   });
 
-  describe('PUT /api/orders/:id', () => {
+  describe('PUT /api/v1/orders/:id', () => {
     it('should update order as admin', async () => {
       const order = await Order.create({
         items: [{ product: productId, name: 'Test', condition: 'New', price: 999, quantity: 1 }],
@@ -205,7 +203,7 @@ describe('Orders', () => {
       });
 
       const res = await request(app)
-        .put(`/api/orders/${order._id}`)
+        .put(`/api/v1/orders/${order._id}`)
         .set('Cookie', `authToken=${adminToken}`)
         .send({ status: 'Completed' });
 
@@ -214,7 +212,7 @@ describe('Orders', () => {
     });
   });
 
-  describe('DELETE /api/orders/:id', () => {
+  describe('DELETE /api/v1/orders/:id', () => {
     it('should delete order as admin', async () => {
       const order = await Order.create({
         items: [{ product: productId, name: 'Test', condition: 'New', price: 999, quantity: 1 }],
@@ -225,7 +223,7 @@ describe('Orders', () => {
       });
 
       const res = await request(app)
-        .delete(`/api/orders/${order._id}`)
+        .delete(`/api/v1/orders/${order._id}`)
         .set('Cookie', `authToken=${adminToken}`);
 
       expect(res.statusCode).toEqual(200);
