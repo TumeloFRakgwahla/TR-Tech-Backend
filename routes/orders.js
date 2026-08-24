@@ -1,17 +1,19 @@
 const express = require('express');
+const { serverError, badRequest } = require('../utils/response');
+const { sendPaginated } = require('../utils/pagination');
 const router = express.Router();
-const { body, validationResult } = require('express-validator');
+const { body } = require('express-validator');
+const validate = require('../middleware/validate');
 const Order = require('../models/Order');
-const Product = require('../models/Product');
-const { authenticate, authorize } = require('../middleware/auth');
-
-const validate = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ success: false, errors: errors.array() });
-  }
-  next();
-};
+const { toSafeString } = require('../utils/query');
+const { authenticate, authorize, optionalAuthenticate } = require('../middleware/auth');
+const {
+  createOrder,
+  getOrders,
+  getOrderById,
+  updateOrder,
+  deleteOrder,
+} = require('../services/orderService');
 
 const orderItemValidation = [
   body('items').isArray({ min: 1 }).withMessage('Order must contain at least one item'),
@@ -20,7 +22,7 @@ const orderItemValidation = [
   body('customer.name').trim().notEmpty().withMessage('Customer name is required'),
   body('customer.email').isEmail().withMessage('Valid customer email is required').normalizeEmail(),
   body('customer.phone').trim().notEmpty().withMessage('Customer phone is required'),
-  body('totalAmount').isFloat({ min: 0 }).withMessage('Total amount must be a positive number')
+  body('totalAmount').optional().isFloat({ min: 0 }).withMessage('Total amount must be a positive number')
 ];
 
 const orderUpdateValidation = [
@@ -48,6 +50,41 @@ const buildStatsPipeline = (matchStage) => [
     },
   },
 ];
+
+router.get('/my-orders', optionalAuthenticate, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const { page = 1, limit = 20 } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [orders, total] = await Promise.all([
+      getOrders({ userId: req.user._id }, pageNum, limitNum),
+    ]);
+
+    sendPaginated(res, orders.orders, total, pageNum, limitNum);
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
+router.get('/my-orders/:id', optionalAuthenticate, async (req, res) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+    const order = await getOrderById(req.params.id);
+    if (!order || order.userId?.toString() !== req.user._id.toString()) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+    res.json({ success: true, data: order });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
 
 router.get('/stats', authenticate, authorize('admin'), async (req, res) => {
   try {
@@ -95,91 +132,54 @@ router.get('/stats', authenticate, authorize('admin'), async (req, res) => {
       },
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
 router.get('/', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const { status, page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20 } = req.query;
     let query = {};
 
+    const status = toSafeString(req.query.status);
     if (status) query.status = status;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-    const skip = (pageNum - 1) * limitNum;
 
-    const [orders, total] = await Promise.all([
-      Order.find(query).populate('items.product').sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      Order.countDocuments(query)
-    ]);
+    const { orders, total } = await getOrders(query, pageNum, limitNum);
 
-    res.json({
-      success: true,
-      count: orders.length,
-      total,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil(total / limitNum),
-      data: orders
-    });
+    sendPaginated(res, orders, total, pageNum, limitNum);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
 router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).populate('items.product');
+    const order = await getOrderById(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
     res.json({ success: true, data: order });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
-router.post('/', orderItemValidation, validate, async (req, res) => {
+router.post('/', optionalAuthenticate, orderItemValidation, validate, async (req, res) => {
   try {
-    const { items, customer, totalAmount, paymentMethod, status, paymentStatus, notes } = req.body;
-
-    for (const item of items) {
-      const updatedProduct = await Product.findOneAndUpdate(
-        { _id: item.product, stock: { $gte: item.quantity } },
-        { $inc: { stock: -item.quantity } },
-        { new: true }
-      );
-
-      if (!updatedProduct) {
-        const product = await Product.findById(item.product);
-        if (!product) {
-          return res.status(400).json({
-            success: false,
-            message: `Product ${item.product} not found`
-          });
-        }
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for ${product.name}`
-        });
-      }
-    }
-
-    const order = await Order.create({
+    const { items, customer, paymentMethod, notes } = req.body;
+    const order = await createOrder({
       items,
       customer,
-      totalAmount,
       paymentMethod,
-      status: status || 'Pending',
-      paymentStatus: paymentStatus || 'Pending',
-      notes
+      notes,
+      userId: req.user ? req.user._id : undefined,
     });
-
     res.status(201).json({ success: true, data: order });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    badRequest(res, error);
   }
 });
 
@@ -191,31 +191,26 @@ router.put('/:id', authenticate, authorize('admin'), orderUpdateValidation, vali
     if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus;
     if (notes !== undefined) updateData.notes = notes;
 
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    ).populate('items.product');
-
+    const order = await updateOrder(req.params.id, updateData);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
     res.json({ success: true, data: order });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    badRequest(res, error);
   }
 });
 
 router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const order = await Order.findByIdAndDelete(req.params.id);
+    const order = await deleteOrder(req.params.id);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
     res.json({ success: true, message: 'Order deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 

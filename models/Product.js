@@ -18,6 +18,12 @@ const productSchema = new mongoose.Schema({
     enum: ['Smartphones', 'Laptops', 'Laptop Accessories', 'Mobile Accessories', 'Gaming', 'Networking', 'Printers', 'Storage Devices', 'Other'],
     default: 'Other'
   },
+  brand: {
+    type: String,
+    required: [true, 'Brand is required'],
+    enum: ['Apple', 'Samsung', 'HP', 'Dell', 'Lenovo', 'Asus', 'Huawei', 'Xiaomi', 'Sony', 'LG', 'Microsoft', 'Google', 'Other'],
+    default: 'Other'
+  },
   price: {
     type: Number,
     required: [true, 'Price is required'],
@@ -47,6 +53,7 @@ const productSchema = new mongoose.Schema({
   timestamps: true,
   indexes: [
     { key: { category: 1 } },
+    { key: { brand: 1 } },
     { key: { status: 1 } },
     { key: { category: 1, status: 1 } },
     { key: { name: 'text', description: 'text' } }

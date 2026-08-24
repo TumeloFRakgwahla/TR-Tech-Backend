@@ -39,6 +39,11 @@ const orderSchema = new mongoose.Schema({
       province: String
     }
   },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true
+  },
   items: [orderItemSchema],
   totalAmount: {
     type: Number,

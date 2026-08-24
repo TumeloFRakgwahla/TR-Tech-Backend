@@ -1,25 +1,29 @@
 const express = require('express');
+const { serverError, badRequest } = require('../utils/response');
+const { sendPaginated } = require('../utils/pagination');
 const router = express.Router();
-const { body, validationResult } = require('express-validator');
+const { body } = require('express-validator');
+const validate = require('../middleware/validate');
 const Product = require('../models/Product');
 const { authenticate, authorize } = require('../middleware/auth');
-
-const validate = (req, res, next) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    return res.status(400).json({ success: false, errors: errors.array() });
-  }
-  next();
-};
+const { toSafeString, escapeRegex } = require('../utils/query');
+const {
+  createProduct,
+  getProducts,
+  getProductById,
+  updateProduct,
+  deleteProduct,
+} = require('../services/productService');
 
 const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
   body('description').trim().notEmpty().withMessage('Product description is required').isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
   body('category').trim().notEmpty().withMessage('Category is required'),
+  body('brand').trim().notEmpty().withMessage('Brand is required'),
   body('price').isFloat({ min: 0 }).withMessage('Price must be a positive number'),
   body('condition').trim().notEmpty().withMessage('Condition is required'),
   body('stock').isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
-  body('status').optional().trim().notEmpty().withMessage('Status cannot be empty')
+  body('status').optional().trim().isIn(['Active', 'Inactive', 'Out of Stock']).withMessage('Invalid status')
 ];
 
 router.get('/low-stock', authenticate, authorize('admin'), async (req, res) => {
@@ -28,92 +32,92 @@ router.get('/low-stock', authenticate, authorize('admin'), async (req, res) => {
     const products = await Product.find({ stock: { $lte: threshold }, status: 'Active' }).sort({ stock: 1 });
     res.json({ success: true, count: products.length, data: products });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
 router.get('/', async (req, res) => {
   try {
-    const { category, status, search, page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20 } = req.query;
     let query = {};
 
+    const category = toSafeString(req.query.category);
+    const brand = toSafeString(req.query.brand);
+    const status = toSafeString(req.query.status);
+    const search = toSafeString(req.query.search);
+
     if (category) query.category = category;
+    if (brand) query.brand = brand;
     if (status) query.status = status;
     if (search) {
+      const safeSearch = escapeRegex(search);
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { description: { $regex: search, $options: 'i' } }
+        { name: { $regex: safeSearch, $options: 'i' } },
+        { description: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-    const skip = (pageNum - 1) * limitNum;
 
-    const [products, total] = await Promise.all([
-      Product.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      Product.countDocuments(query)
-    ]);
+    const { products, total } = await getProducts(query, pageNum, limitNum);
 
-    res.json({
-      success: true,
-      count: products.length,
-      total,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil(total / limitNum),
-      data: products
-    });
+    sendPaginated(res, products, total, pageNum, limitNum);
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
 router.get('/:id', async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await getProductById(req.params.id);
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
     res.json({ success: true, data: product });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 
 router.post('/', authenticate, authorize('admin'), productValidation, validate, async (req, res) => {
   try {
-    const product = await Product.create(req.body);
+    const { name, description, category, brand, price, condition, image, stock, status } = req.body;
+    const product = await createProduct({
+      name, description, category, brand, price, condition,
+      image, stock,
+      status: status || 'Active',
+    });
     res.status(201).json({ success: true, data: product });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    badRequest(res, error);
   }
 });
 
 router.put('/:id', authenticate, authorize('admin'), productValidation, validate, async (req, res) => {
   try {
-    const product = await Product.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true
+    const { name, description, category, brand, price, condition, image, stock, status } = req.body;
+    const product = await updateProduct(req.params.id, {
+      name, description, category, brand, price, condition, image, stock, status
     });
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
     res.json({ success: true, data: product });
   } catch (error) {
-    res.status(400).json({ success: false, message: error.message });
+    badRequest(res, error);
   }
 });
 
 router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
+    const product = await deleteProduct(req.params.id);
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
     res.json({ success: true, message: 'Product deleted successfully' });
   } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
+    serverError(res, error);
   }
 });
 

@@ -4,10 +4,8 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Product = require('../models/Product');
 
-const generateToken = (id) => {
-  const jwt = require('jsonwebtoken');
-  return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
-};
+const { createToken } = require('./helpers/createToken');
+const generateToken = createToken;
 
 describe('Products', () => {
   let adminToken;
@@ -22,12 +20,13 @@ describe('Products', () => {
       phone: '1234567890',
       role: 'admin',
     });
-    adminToken = generateToken(admin._id);
+    adminToken = await generateToken(admin._id);
 
     const product = await Product.create({
       name: 'Test Product',
       description: 'Test description',
       category: 'Smartphones',
+      brand: 'Other',
       price: 999,
       condition: 'New',
       stock: 10,
@@ -41,49 +40,50 @@ describe('Products', () => {
     await Product.deleteMany({});
   });
 
-  describe('GET /api/products', () => {
+  describe('GET /api/v1/products', () => {
     it('should get all products', async () => {
-      const res = await request(app).get('/api/products');
+      const res = await request(app).get('/api/v1/products');
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBe(true);
       expect(res.body.data.length).toBeGreaterThan(0);
     });
 
     it('should filter products by category', async () => {
-      const res = await request(app).get('/api/products?category=Smartphones');
+      const res = await request(app).get('/api/v1/products?category=Smartphones');
       expect(res.statusCode).toEqual(200);
       expect(res.body.data.every((p) => p.category === 'Smartphones')).toBe(true);
     });
 
     it('should paginate products', async () => {
-      const res = await request(app).get('/api/products?page=1&limit=1');
+      const res = await request(app).get('/api/v1/products?page=1&limit=1');
       expect(res.statusCode).toEqual(200);
       expect(res.body.count).toBe(1);
     });
   });
 
-  describe('GET /api/products/:id', () => {
+  describe('GET /api/v1/products/:id', () => {
     it('should get product by id', async () => {
-      const res = await request(app).get(`/api/products/${productId}`);
+      const res = await request(app).get(`/api/v1/products/${productId}`);
       expect(res.statusCode).toEqual(200);
       expect(res.body.data.name).toBe('Test Product');
     });
 
     it('should return 404 for invalid id', async () => {
-      const res = await request(app).get('/api/products/60d5ec9af6820b7e3c4b4567');
+      const res = await request(app).get('/api/v1/products/60d5ec9af6820b7e3c4b4567');
       expect(res.statusCode).toEqual(404);
     });
   });
 
-  describe('POST /api/products', () => {
+  describe('POST /api/v1/products', () => {
     it('should create product as admin', async () => {
       const res = await request(app)
-        .post('/api/products')
+        .post('/api/v1/products')
         .set('Cookie', `authToken=${adminToken}`)
         .send({
           name: 'New Product',
           description: 'New description',
           category: 'Laptops',
+          brand: 'Other',
           price: 1999,
           condition: 'New',
           stock: 5,
@@ -97,7 +97,7 @@ describe('Products', () => {
 
     it('should fail without auth', async () => {
       const res = await request(app)
-        .post('/api/products')
+        .post('/api/v1/products')
         .send({
           name: 'No Auth Product',
           description: 'Desc',
@@ -114,12 +114,13 @@ describe('Products', () => {
 
     it('should fail validation', async () => {
       const res = await request(app)
-        .post('/api/products')
+        .post('/api/v1/products')
         .set('Cookie', `authToken=${adminToken}`)
         .send({
           name: '',
           description: 'Desc',
           category: 'Laptops',
+          brand: 'Other',
           price: -100,
           condition: 'New',
           stock: 5,
@@ -131,15 +132,16 @@ describe('Products', () => {
     });
   });
 
-  describe('PUT /api/products/:id', () => {
+  describe('PUT /api/v1/products/:id', () => {
     it('should update product as admin', async () => {
       const res = await request(app)
-        .put(`/api/products/${productId}`)
+        .put(`/api/v1/products/${productId}`)
         .set('Cookie', `authToken=${adminToken}`)
         .send({
           name: 'Test Product',
           description: 'Test description',
           category: 'Smartphones',
+          brand: 'Other',
           price: 1200,
           condition: 'New',
           stock: 10,
@@ -151,10 +153,10 @@ describe('Products', () => {
     });
   });
 
-  describe('DELETE /api/products/:id', () => {
+  describe('DELETE /api/v1/products/:id', () => {
     it('should delete product as admin', async () => {
       const res = await request(app)
-        .delete(`/api/products/${productId}`)
+        .delete(`/api/v1/products/${productId}`)
         .set('Cookie', `authToken=${adminToken}`);
 
       expect(res.statusCode).toEqual(200);
