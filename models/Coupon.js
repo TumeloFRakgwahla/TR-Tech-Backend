@@ -7,6 +7,13 @@ const couponSchema = new mongoose.Schema({
   minOrder: { type: Number, default: 0, min: 0 },
   expires: { type: Date },
   status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
-}, { timestamps: true });
+  }, {
+  timestamps: true,
+  indexes: [
+    { key: { code: 1 } },
+    { key: { status: 1 } },
+    { key: { expires: 1 } }
+  ]
+});
 
 module.exports = mongoose.model('Coupon', couponSchema);

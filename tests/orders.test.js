@@ -9,7 +9,7 @@ const { createToken } = require('./helpers/createToken');
 const generateToken = createToken;
 
 describe('Orders', () => {
-  let adminToken;
+  let adminAuthToken;
   let productId;
 
   beforeEach(async () => {
@@ -21,7 +21,7 @@ describe('Orders', () => {
       phone: '1234567890',
       role: 'admin',
     });
-    adminToken = await generateToken(admin._id);
+    adminAuthToken = await generateToken(admin._id);
 
     const product = await Product.create({
       name: 'Test Product',
@@ -53,7 +53,7 @@ describe('Orders', () => {
 
       const res = await request(app)
         .get('/api/v1/orders/stats')
-        .set('Cookie', `authToken=${adminToken}`);
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`);
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBe(true);
@@ -82,7 +82,7 @@ describe('Orders', () => {
     it('should list orders as admin', async () => {
       const res = await request(app)
         .get('/api/v1/orders')
-        .set('Cookie', `authToken=${adminToken}`);
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`);
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBe(true);
@@ -92,7 +92,7 @@ describe('Orders', () => {
     it('should filter orders by status', async () => {
       const res = await request(app)
         .get('/api/v1/orders?status=Pending')
-        .set('Cookie', `authToken=${adminToken}`);
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`);
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.data.every((o) => o.status === 'Pending')).toBe(true);
@@ -111,7 +111,7 @@ describe('Orders', () => {
 
       const res = await request(app)
         .get(`/api/v1/orders/${order._id}`)
-        .set('Cookie', `authToken=${adminToken}`);
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`);
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.data._id).toEqual(order._id.toString());
@@ -120,7 +120,7 @@ describe('Orders', () => {
     it('should return 404 for invalid id', async () => {
       const res = await request(app)
         .get('/api/v1/orders/60d5ec9af6820b7e3c4b4567')
-        .set('Cookie', `authToken=${adminToken}`);
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`);
 
       expect(res.statusCode).toEqual(404);
     });
@@ -204,7 +204,7 @@ describe('Orders', () => {
 
       const res = await request(app)
         .put(`/api/v1/orders/${order._id}`)
-        .set('Cookie', `authToken=${adminToken}`)
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`)
         .send({ status: 'Completed' });
 
       expect(res.statusCode).toEqual(200);
@@ -224,7 +224,7 @@ describe('Orders', () => {
 
       const res = await request(app)
         .delete(`/api/v1/orders/${order._id}`)
-        .set('Cookie', `authToken=${adminToken}`);
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`);
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBe(true);

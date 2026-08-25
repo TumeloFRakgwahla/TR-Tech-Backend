@@ -30,6 +30,12 @@ router.get('/check/:productId', authenticate, async (req, res) => {
 
 router.post('/:productId', authenticate, async (req, res) => {
   try {
+    const Product = require('../models/Product');
+    const product = await Product.findById(req.params.productId);
+    if (!product) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
     let wishlist = await Wishlist.findOne({ user: req.user._id });
     if (!wishlist) {
       wishlist = new Wishlist({ user: req.user._id, products: [] });

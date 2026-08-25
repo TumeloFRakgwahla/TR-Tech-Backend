@@ -3,7 +3,7 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const { serverError } = require('../utils/response');
 
 const uploadsDir = path.join(__dirname, '../uploads');
@@ -36,7 +36,7 @@ const upload = multer({
   }
 });
 
-router.post('/image', authenticate, authorize('admin'), upload.single('image'), (req, res) => {
+router.post('/image', authenticateAdmin, upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
@@ -54,7 +54,7 @@ router.post('/image', authenticate, authorize('admin'), upload.single('image'), 
   }
 });
 
-router.post('/images', authenticate, authorize('admin'), upload.array('images', 10), (req, res) => {
+router.post('/images', authenticateAdmin, upload.array('images', 10), (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: 'No files uploaded' });
@@ -70,7 +70,7 @@ router.post('/images', authenticate, authorize('admin'), upload.array('images', 
   }
 });
 
-router.delete('/image/:filename', authenticate, authorize('admin'), (req, res) => {
+router.delete('/image/:filename', authenticateAdmin, (req, res) => {
   try {
     const filename = req.params.filename;
     if (typeof filename !== 'string' || !/^[\w.-]+$/.test(filename) || filename === '.' || filename === '..') {

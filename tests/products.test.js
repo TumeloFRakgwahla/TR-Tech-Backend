@@ -8,7 +8,7 @@ const { createToken } = require('./helpers/createToken');
 const generateToken = createToken;
 
 describe('Products', () => {
-  let adminToken;
+  let adminAuthToken;
   let productId;
 
   beforeEach(async () => {
@@ -20,7 +20,7 @@ describe('Products', () => {
       phone: '1234567890',
       role: 'admin',
     });
-    adminToken = await generateToken(admin._id);
+    adminAuthToken = await generateToken(admin._id);
 
     const product = await Product.create({
       name: 'Test Product',
@@ -78,7 +78,7 @@ describe('Products', () => {
     it('should create product as admin', async () => {
       const res = await request(app)
         .post('/api/v1/products')
-        .set('Cookie', `authToken=${adminToken}`)
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`)
         .send({
           name: 'New Product',
           description: 'New description',
@@ -115,7 +115,7 @@ describe('Products', () => {
     it('should fail validation', async () => {
       const res = await request(app)
         .post('/api/v1/products')
-        .set('Cookie', `authToken=${adminToken}`)
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`)
         .send({
           name: '',
           description: 'Desc',
@@ -136,7 +136,7 @@ describe('Products', () => {
     it('should update product as admin', async () => {
       const res = await request(app)
         .put(`/api/v1/products/${productId}`)
-        .set('Cookie', `authToken=${adminToken}`)
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`)
         .send({
           name: 'Test Product',
           description: 'Test description',
@@ -157,7 +157,7 @@ describe('Products', () => {
     it('should delete product as admin', async () => {
       const res = await request(app)
         .delete(`/api/v1/products/${productId}`)
-        .set('Cookie', `authToken=${adminToken}`);
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`);
 
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBe(true);

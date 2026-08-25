@@ -29,20 +29,22 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
-const connectSrc = isDev ? ["'self'", frontendUrl] : ["'self'"];
+const connectSrc = isDev
+  ? ["'self'", "https://wa.me", "https://api.trtech.co.za"]
+  : ["'self'", "https://wa.me", "https://api.trtech.co.za"];
 
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'"],
+      scriptSrc: ["'self'", "https://wa.me"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       imgSrc: ["'self'", "data:", "https:"],
       connectSrc: connectSrc,
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", "data:", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
+      frameSrc: ["https://wa.me"],
       frameAncestors: ["'none'"],
       formAction: ["'self'"],
       baseUri: ["'self'"],

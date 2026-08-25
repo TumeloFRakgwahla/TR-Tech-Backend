@@ -16,7 +16,13 @@ const paymentMethodSchema = new mongoose.Schema({
   expMonth: { type: Number, min: 1, max: 12 },
   expYear: { type: Number },
 
-  isDefault: { type: Boolean, default: false },
-}, { timestamps: true });
+   isDefault: { type: Boolean, default: false },
+  }, {
+  timestamps: true,
+  indexes: [
+    { key: { userId: 1 } },
+    { key: { userId: 1, isDefault: 1 } }
+  ]
+});
 
 module.exports = mongoose.model('PaymentMethod', paymentMethodSchema);

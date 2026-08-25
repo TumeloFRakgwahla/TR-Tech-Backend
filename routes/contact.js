@@ -5,7 +5,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Contact = require('../models/Contact');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const { toSafeString } = require('../utils/query');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
 
@@ -28,7 +28,7 @@ router.post('/', contactLimiter, contactValidation, validate, async (req, res) =
   }
 });
 
-router.get('/', authenticate, authorize('admin'), async (req, res) => {
+router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const status = toSafeString(req.query.status);
     let query = {};
@@ -50,7 +50,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const contact = await Contact.findById(req.params.id);
     if (!contact) {
@@ -62,7 +62,7 @@ router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-router.put('/:id', authenticate, authorize('admin'), [
+router.put('/:id', authenticateAdmin, [
   body('status').optional().isIn(['New', 'Read', 'Replied', 'Closed']).withMessage('Invalid status')
 ], validate, async (req, res) => {
   try {
@@ -83,7 +83,7 @@ router.put('/:id', authenticate, authorize('admin'), [
   }
 });
 
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const contact = await Contact.findByIdAndDelete(req.params.id);
     if (!contact) {

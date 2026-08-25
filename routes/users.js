@@ -6,7 +6,7 @@ const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const User = require('../models/User');
 const Session = require('../models/Session');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const { toSafeString, escapeRegex } = require('../utils/query');
 
 const userValidation = [
@@ -23,7 +23,7 @@ const passwordResetValidation = [
     .matches(/^(?=.*[a-zA-Z])(?=.*\d).+$/).withMessage('Password must contain both letters and numbers'),
 ];
 
-router.get('/', authenticate, authorize('admin'), async (req, res) => {
+router.get('/', authenticateAdmin, async (req, res) => {
   try {
   const { page = 1, limit = 20 } = req.query;
   let query = {};
@@ -56,7 +56,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
     if (!user) {
@@ -68,7 +68,7 @@ router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-router.put('/:id', authenticate, authorize('admin'), userValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, userValidation, validate, async (req, res) => {
   try {
     // Strip password from mass-assignment: findByIdAndUpdate does not run the
     // pre('save') hook, so a plaintext password in the body would be stored as-is.
@@ -87,7 +87,7 @@ router.put('/:id', authenticate, authorize('admin'), userValidation, validate, a
   }
 });
 
-router.put('/:id/password', authenticate, authorize('admin'), passwordResetValidation, validate, async (req, res) => {
+router.put('/:id/password', authenticateAdmin, passwordResetValidation, validate, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -108,7 +108,7 @@ router.put('/:id/password', authenticate, authorize('admin'), passwordResetValid
   }
 });
 
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {
