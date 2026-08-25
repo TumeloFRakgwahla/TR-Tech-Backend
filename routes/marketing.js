@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const Coupon = require('../models/Coupon');
 const Campaign = require('../models/Campaign');
 const Promotion = require('../models/Promotion');
@@ -80,7 +80,7 @@ router.get('/promotions', async (req, res) => {
   }
 });
 
-router.use(authenticate, authorize('admin'));
+router.use(authenticateAdmin);
 
 router.post('/coupons', [
   body('code').trim().notEmpty().withMessage('Code is required').isLength({ max: 50 }),

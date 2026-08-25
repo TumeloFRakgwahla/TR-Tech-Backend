@@ -5,7 +5,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Product = require('../models/Product');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const { toSafeString, escapeRegex } = require('../utils/query');
 const {
   createProduct,
@@ -26,7 +26,7 @@ const productValidation = [
   body('status').optional().trim().isIn(['Active', 'Inactive', 'Out of Stock']).withMessage('Invalid status')
 ];
 
-router.get('/low-stock', authenticate, authorize('admin'), async (req, res) => {
+router.get('/low-stock', authenticateAdmin, async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 10;
     const products = await Product.find({ stock: { $lte: threshold }, status: 'Active' }).sort({ stock: 1 });
@@ -80,7 +80,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', authenticate, authorize('admin'), productValidation, validate, async (req, res) => {
+router.post('/', authenticateAdmin, productValidation, validate, async (req, res) => {
   try {
     const { name, description, category, brand, price, condition, image, stock, status } = req.body;
     const product = await createProduct({
@@ -94,7 +94,7 @@ router.post('/', authenticate, authorize('admin'), productValidation, validate, 
   }
 });
 
-router.put('/:id', authenticate, authorize('admin'), productValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, productValidation, validate, async (req, res) => {
   try {
     const { name, description, category, brand, price, condition, image, stock, status } = req.body;
     const product = await updateProduct(req.params.id, {
@@ -109,7 +109,7 @@ router.put('/:id', authenticate, authorize('admin'), productValidation, validate
   }
 });
 
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const product = await deleteProduct(req.params.id);
     if (!product) {

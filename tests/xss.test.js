@@ -9,7 +9,7 @@ const { createToken } = require('./helpers/createToken');
 const generateToken = createToken;
 
 describe('XSS Sanitization', () => {
-  let adminToken;
+  let adminAuthToken;
 
   beforeEach(async () => {
     const admin = await User.create({
@@ -20,7 +20,7 @@ describe('XSS Sanitization', () => {
       phone: '1234567890',
       role: 'admin',
     });
-    adminToken = await generateToken(admin._id);
+    adminAuthToken = await generateToken(admin._id);
     await Session.create({ userId: admin._id, tokenIdentifier: 'xssjti', isActive: true, expiresAt: new Date(Date.now() + 86400000) });
   });
 
@@ -32,7 +32,7 @@ describe('XSS Sanitization', () => {
   it('escapes HTML in product name on create', async () => {
     const res = await request(app)
       .post('/api/v1/products')
-      .set('Cookie', `authToken=${adminToken}`)
+      .set('Cookie', `adminAuthToken=${adminAuthToken}`)
       .send({
         name: '<script>alert("xss")</script>',
         description: 'Test',
@@ -63,7 +63,7 @@ describe('XSS Sanitization', () => {
 
     const res = await request(app)
       .put(`/api/v1/products/${product._id}`)
-      .set('Cookie', `authToken=${adminToken}`)
+      .set('Cookie', `adminAuthToken=${adminAuthToken}`)
       .send({
         name: '<img src=x onerror=alert(1)>',
         description: 'Test',

@@ -5,7 +5,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Repair = require('../models/Repair');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const { toSafeString } = require('../utils/query');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
 
@@ -46,7 +46,7 @@ router.post('/', repairLimiter, repairValidation, validate, async (req, res) => 
   }
 });
 
-router.get('/', authenticate, authorize('admin'), async (req, res) => {
+router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const status = toSafeString(req.query.status);
     let query = {};
@@ -68,7 +68,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const repair = await Repair.findById(req.params.id);
     if (!repair) {
@@ -80,7 +80,7 @@ router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-router.put('/:id', authenticate, authorize('admin'), repairUpdateValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, repairUpdateValidation, validate, async (req, res) => {
   try {
     const { status, notes, estimatedCost } = req.body;
     const updateData = {};
@@ -104,7 +104,7 @@ router.put('/:id', authenticate, authorize('admin'), repairUpdateValidation, val
   }
 });
 
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const repair = await Repair.findByIdAndDelete(req.params.id);
     if (!repair) {

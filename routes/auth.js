@@ -5,7 +5,7 @@ const validate = require('../middleware/validate');
 const { verifyToken } = require('../utils/jwt');
 const { issueSession, revokeSession, isSessionActive } = require('../utils/session');
 const User = require('../models/User');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, authenticateAdmin } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');
 
 const router = express.Router();
@@ -42,10 +42,9 @@ router.post('/register', authLimiter, [
     const verificationToken = user.generateEmailVerificationToken();
     await user.save();
     // TODO: send verification email via provider (nodemailer/SendGrid).
-    // In non-production the raw token is logged for local testing only.
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[dev] email verification token for ${user.email}: ${verificationToken}`);
-    }
+    // Verification tokens must never be logged to stdout or persisted in logs
+    // — they are single-use secrets. In non-production environments the token
+    // is returned to the caller via the API response only if explicitly needed.
 
     const token = await issueSession(user, req);
 
@@ -144,6 +143,7 @@ router.post('/login', authLimiter, [
         lastName: user.lastName,
         email: user.email,
         phone: user.phone,
+        address: user.address,
         role: user.role
       }
     });
@@ -263,19 +263,142 @@ router.post('/resend-verification', [
 ], validate, async (req, res) => {
   try {
     const user = await User.findOne({ email: req.body.email });
-    // Avoid account enumeration: always return the same generic message.
     if (!user || user.emailVerified) {
       return res.json({ success: true, message: 'If that email exists and is unverified, a verification link has been sent' });
     }
     const verificationToken = user.generateEmailVerificationToken();
     await user.save();
-    if (process.env.NODE_ENV !== 'production') {
-      console.log(`[dev] email verification token for ${user.email}: ${verificationToken}`);
-    }
+    // Verification tokens must never be logged — they are single-use secrets.
     res.json({ success: true, message: 'If that email exists and is unverified, a verification link has been sent' });
   } catch (error) {
     console.error('Resend verification error:', error);
     res.status(500).json({ success: false, message: 'Server error resending verification' });
+  }
+});
+
+router.post('/admin/login', authLimiter, [
+  body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
+  body('password').notEmpty().withMessage('Password is required')
+], validate, async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email }).select('+password');
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    if (user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. Admin credentials required.'
+      });
+    }
+
+    if (user.isLocked()) {
+      return res.status(429).json({
+        success: false,
+        message: 'Account temporarily locked due to too many failed attempts. Try again later.'
+      });
+    }
+
+    const isMatch = await user.matchPassword(password);
+    if (!isMatch) {
+      user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
+      if (user.failedLoginAttempts >= 5) {
+        user.lockUntil = Date.now() + 15 * 60 * 1000;
+        user.failedLoginAttempts = 0;
+      }
+      await user.save();
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    user.failedLoginAttempts = 0;
+    user.lockUntil = null;
+    await user.save();
+
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your account has been deactivated'
+      });
+    }
+
+    const token = await issueSession(user, req);
+
+    res.cookie('adminAuthToken', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      maxAge: 30 * 24 * 60 * 60 * 1000,
+      path: '/',
+    });
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        address: user.address,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error('Admin login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during admin login'
+    });
+  }
+});
+
+router.get('/admin/me', authenticateAdmin, async (req, res) => {
+  res.json({
+    success: true,
+    user: {
+      id: req.user._id,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      email: req.user.email,
+      phone: req.user.phone,
+      address: req.user.address,
+      role: req.user.role
+    }
+  });
+});
+
+router.post('/admin/logout', async (req, res) => {
+  try {
+    const token = req.cookies?.adminAuthToken;
+    if (token) {
+      const decoded = verifyToken(token);
+      await revokeSession(decoded.jti, decoded.id);
+    }
+  } catch (error) {
+    console.error('Admin logout session revocation error:', error);
+  } finally {
+    res.clearCookie('adminAuthToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+    });
+    res.clearCookie('csrf_token', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      path: '/',
+    });
+    res.json({ success: true, message: 'Logged out successfully' });
   }
 });
 

@@ -4,7 +4,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Service = require('../models/Service');
-const { authenticate, authorize } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const { toSafeString } = require('../utils/query');
 
 const serviceValidation = [
@@ -61,7 +61,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', authenticate, authorize('admin'), serviceValidation, validate, async (req, res) => {
+router.post('/', authenticateAdmin, serviceValidation, validate, async (req, res) => {
   try {
     const { name, description, category, price, estimatedTime, image, icon, features, status } = req.body;
     const service = await Service.create({
@@ -75,7 +75,7 @@ router.post('/', authenticate, authorize('admin'), serviceValidation, validate, 
   }
 });
 
-router.put('/:id', authenticate, authorize('admin'), serviceValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, serviceValidation, validate, async (req, res) => {
   try {
     const { name, description, category, price, estimatedTime, image, icon, features, status } = req.body;
     const service = await Service.findByIdAndUpdate(
@@ -92,7 +92,7 @@ router.put('/:id', authenticate, authorize('admin'), serviceValidation, validate
   }
 });
 
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const service = await Service.findByIdAndDelete(req.params.id);
     if (!service) {

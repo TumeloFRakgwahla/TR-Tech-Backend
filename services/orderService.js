@@ -57,6 +57,14 @@ const createOrder = async (orderData) => {
     notes: orderData.notes,
   });
 
+  if (orderData.userId) {
+    const Cart = require('../models/Cart');
+    await Cart.findOneAndUpdate(
+      { user: orderData.userId },
+      { $set: { items: [] } }
+    );
+  }
+
   return order;
 };
 

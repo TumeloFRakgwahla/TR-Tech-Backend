@@ -6,7 +6,7 @@ const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Order = require('../models/Order');
 const { toSafeString } = require('../utils/query');
-const { authenticate, authorize, optionalAuthenticate } = require('../middleware/auth');
+const { authenticateAdmin, optionalAuthenticate } = require('../middleware/auth');
 const {
   createOrder,
   getOrders,
@@ -86,7 +86,7 @@ router.get('/my-orders/:id', optionalAuthenticate, async (req, res) => {
   }
 });
 
-router.get('/stats', authenticate, authorize('admin'), async (req, res) => {
+router.get('/stats', authenticateAdmin, async (req, res) => {
   try {
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -136,7 +136,7 @@ router.get('/stats', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-router.get('/', authenticate, authorize('admin'), async (req, res) => {
+router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
     let query = {};
@@ -155,7 +155,7 @@ router.get('/', authenticate, authorize('admin'), async (req, res) => {
   }
 });
 
-router.get('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const order = await getOrderById(req.params.id);
     if (!order) {
@@ -183,7 +183,7 @@ router.post('/', optionalAuthenticate, orderItemValidation, validate, async (req
   }
 });
 
-router.put('/:id', authenticate, authorize('admin'), orderUpdateValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, orderUpdateValidation, validate, async (req, res) => {
   try {
     const { status, paymentStatus, notes } = req.body;
     const updateData = {};
@@ -202,7 +202,7 @@ router.put('/:id', authenticate, authorize('admin'), orderUpdateValidation, vali
   }
 });
 
-router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const order = await deleteOrder(req.params.id);
     if (!order) {

@@ -5,8 +5,10 @@ const rateLimit = require('express-rate-limit');
 const isTest = process.env.NODE_ENV === 'test';
 const passthrough = () => (req, res, next) => next();
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const createAuthLimiter = () => {
-  if (isTest) return passthrough();
+  if (isTest || isDevelopment) return passthrough();
   return rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
@@ -17,7 +19,7 @@ const createAuthLimiter = () => {
 };
 
 const createApiLimiter = () => {
-  if (isTest) return passthrough();
+  if (isTest || isDevelopment) return passthrough();
   return rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -29,7 +31,7 @@ const createApiLimiter = () => {
 
 // For public, unauthenticated write endpoints (contact form, repair bookings).
 const createPublicLimiter = () => {
-  if (isTest) return passthrough();
+  if (isTest || isDevelopment) return passthrough();
   return rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,

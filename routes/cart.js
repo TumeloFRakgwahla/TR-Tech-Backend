@@ -37,6 +37,11 @@ router.post('/', authenticate, cartItemValidation, validate, async (req, res) =>
     const { product, name, condition, price, quantity, image } = req.body;
     const productId = product;
 
+    const productDoc = await Product.findById(productId).catch(() => null);
+    if (!productDoc) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
     let cart = await Cart.findOne({ user: req.user._id });
     if (!cart) {
       cart = await Cart.create({ user: req.user._id, items: [] });
@@ -48,20 +53,33 @@ router.post('/', authenticate, cartItemValidation, validate, async (req, res) =>
 
     const itemData = {
       product: productId,
-      name: name || '',
-      condition: condition || '',
-      price: price || 0,
+      name: name || productDoc.name,
+      condition: condition || productDoc.condition,
+      price: price || productDoc.price,
       quantity: quantity || 1,
-      image: image || ''
+      image: image || productDoc.image || ''
     };
 
     if (existingIndex >= 0) {
-      cart.items[existingIndex].quantity = itemData.quantity;
+      const newQuantity = cart.items[existingIndex].quantity + itemData.quantity;
+      if (newQuantity > productDoc.stock) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Cannot add more. Only ${productDoc.stock} available in stock. Current quantity: ${cart.items[existingIndex].quantity}` 
+        });
+      }
+      cart.items[existingIndex].quantity = newQuantity;
       if (itemData.name) cart.items[existingIndex].name = itemData.name;
       if (itemData.condition) cart.items[existingIndex].condition = itemData.condition;
       if (itemData.price) cart.items[existingIndex].price = itemData.price;
       if (itemData.image) cart.items[existingIndex].image = itemData.image;
     } else {
+      if (itemData.quantity > productDoc.stock) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `Cannot add more. Only ${productDoc.stock} available in stock.` 
+        });
+      }
       cart.items.push(itemData);
     }
 
@@ -79,6 +97,18 @@ router.put('/:productId', authenticate, productIdValidation, validate, async (re
 
     if (!quantity || quantity < 1) {
       return res.status(400).json({ success: false, message: 'Quantity must be at least 1' });
+    }
+
+    const productDoc = await Product.findById(productId).catch(() => null);
+    if (!productDoc) {
+      return res.status(404).json({ success: false, message: 'Product not found' });
+    }
+
+    if (quantity > productDoc.stock) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Only ${productDoc.stock} available in stock` 
+      });
     }
 
     const cart = await Cart.findOne({ user: req.user._id });

@@ -51,9 +51,9 @@ describe('Security', () => {
 
       const attempts = ['..', 'a;b', '..%2F..%2Fpackage.json', 'con%2Ffile'];
       for (const filename of attempts) {
-        const res = await request(app)
-          .delete(`/api/v1/upload/image/${filename}`)
-          .set('Cookie', `authToken=${token}`);
+      const res = await request(app)
+        .delete(`/api/v1/upload/image/${filename}`)
+        .set('Cookie', `adminAuthToken=${token}`);
         expect(res.statusCode).toBeGreaterThanOrEqual(400);
         expect(res.body.success).toBe(false);
       }
@@ -85,7 +85,7 @@ describe('Security', () => {
 
       const res = await request(app)
         .get('/api/v1/products/low-stock')
-        .set('Cookie', `authToken=${token}`);
+        .set('Cookie', `adminAuthToken=${token}`);
       expect(res.statusCode).toEqual(403);
     });
   });
@@ -131,7 +131,7 @@ describe('Security', () => {
 
       const res = await request(app)
         .put(`/api/v1/users/${target._id}/password`)
-        .set('Cookie', `authToken=${token}`)
+        .set('Cookie', `adminAuthToken=${token}`)
         .send({ password: 'newpass123' });
       expect(res.statusCode).toEqual(200);
       expect(res.body.success).toBe(true);
@@ -150,7 +150,7 @@ describe('Security', () => {
       const { target, token } = await setup();
       const res = await request(app)
         .put(`/api/v1/users/${target._id}/password`)
-        .set('Cookie', `authToken=${token}`)
+        .set('Cookie', `adminAuthToken=${token}`)
         .send({ password: 'short' });
       expect(res.statusCode).toEqual(400);
     });
@@ -164,7 +164,7 @@ describe('Security', () => {
         .put(`/api/v1/users/${target._id}/password`)
         .set('Cookie', `authToken=${custToken}`)
         .send({ password: 'newpass123' });
-      expect(res.statusCode).toEqual(403);
+      expect(res.statusCode).toEqual(401);
     });
   });
 });

@@ -162,4 +162,93 @@ describe('Auth', () => {
       expect(res.body.success).toBe(false);
     });
   });
+
+  describe('POST /api/v1/auth/admin/login', () => {
+    it('should login with valid admin credentials', async () => {
+      const res = await request(app)
+        .post('/api/v1/auth/admin/login')
+        .send({
+          email: 'admin@test.com',
+          password: 'password123',
+        });
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.user.email).toBe('admin@test.com');
+      expect(res.body.user.role).toBe('admin');
+    });
+
+    it('should fail with customer credentials', async () => {
+      const res = await request(app)
+        .post('/api/v1/auth/admin/login')
+        .send({
+          email: 'user@test.com',
+          password: 'password123',
+        });
+
+      expect(res.statusCode).toEqual(403);
+      expect(res.body.success).toBe(false);
+    });
+
+    it('should fail with invalid credentials', async () => {
+      const res = await request(app)
+        .post('/api/v1/auth/admin/login')
+        .send({
+          email: 'admin@test.com',
+          password: 'wrongpassword',
+        });
+
+      expect(res.statusCode).toEqual(401);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  describe('GET /api/v1/auth/admin/me', () => {
+    it('should return user when authenticated with admin token', async () => {
+      const loginRes = await request(app)
+        .post('/api/v1/auth/admin/login')
+        .send({
+          email: 'admin@test.com',
+          password: 'password123',
+        });
+      expect(loginRes.statusCode).toEqual(200);
+      const cookie = loginRes.headers['set-cookie'][0].split(';')[0];
+
+      const res = await request(app)
+        .get('/api/v1/auth/admin/me')
+        .set('Cookie', cookie);
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.user.email).toBe('admin@test.com');
+    });
+
+    it('should return 401 when not authenticated', async () => {
+      const res = await request(app)
+        .get('/api/v1/auth/admin/me');
+
+      expect(res.statusCode).toEqual(401);
+      expect(res.body.success).toBe(false);
+    });
+  });
+
+  describe('POST /api/v1/auth/admin/logout', () => {
+    it('should logout successfully', async () => {
+      const loginRes = await request(app)
+        .post('/api/v1/auth/admin/login')
+        .send({
+          email: 'admin@test.com',
+          password: 'password123',
+        });
+      expect(loginRes.statusCode).toEqual(200);
+      const cookie = loginRes.headers['set-cookie'][0].split(';')[0];
+
+      const res = await request(app)
+        .post('/api/v1/auth/admin/logout')
+        .set('Cookie', cookie);
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.success).toBe(true);
+    });
+  });
 });
