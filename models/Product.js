@@ -15,13 +15,13 @@ const productSchema = new mongoose.Schema({
   category: {
     type: String,
     required: [true, 'Category is required'],
-    enum: ['Smartphones', 'Laptops', 'Laptop Accessories', 'Mobile Accessories', 'Gaming', 'Networking', 'Printers', 'Storage Devices', 'Other'],
+    trim: true,
     default: 'Other'
   },
   brand: {
     type: String,
     required: [true, 'Brand is required'],
-    enum: ['Apple', 'Samsung', 'HP', 'Dell', 'Lenovo', 'Asus', 'Huawei', 'Xiaomi', 'Sony', 'LG', 'Microsoft', 'Google', 'Other'],
+    trim: true,
     default: 'Other'
   },
   price: {
@@ -38,6 +38,9 @@ const productSchema = new mongoose.Schema({
     type: String,
     default: 'https://placehold.co/100x100/3b82f6/white?text=TR'
   },
+  images: [{
+    type: String,
+  }],
   stock: {
     type: Number,
     required: [true, 'Stock quantity is required'],
