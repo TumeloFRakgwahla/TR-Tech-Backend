@@ -1,16 +1,21 @@
-const validator = require('validator');
+const sanitizeString = (value) => {
+  if (typeof value !== 'string') return value;
+  return value
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+};
 
-const escapeValue = (value) => {
+const sanitizeValue = (value) => {
   if (typeof value === 'string') {
-    return validator.escape(value);
+    return sanitizeString(value);
   }
   if (Array.isArray(value)) {
-    return value.map(escapeValue);
+    return value.map(sanitizeValue);
   }
   if (value && typeof value === 'object') {
     const sanitized = {};
     for (const key of Object.keys(value)) {
-      sanitized[key] = escapeValue(value[key]);
+      sanitized[key] = sanitizeValue(value[key]);
     }
     return sanitized;
   }
@@ -19,7 +24,7 @@ const escapeValue = (value) => {
 
 const sanitize = (req, res, next) => {
   if (req.body && typeof req.body === 'object') {
-    req.body = escapeValue(req.body);
+    req.body = sanitizeValue(req.body);
   }
   next();
 };

@@ -106,12 +106,29 @@ router.post('/coupons', [
   }
 });
 
-router.put('/coupons/:id', async (req, res) => {
+router.put('/coupons/:id', [
+  body('code').optional().trim().notEmpty().withMessage('Code cannot be empty').isLength({ max: 50 }),
+  body('discount').optional().isFloat({ min: 0 }).withMessage('Discount must be a non-negative number'),
+  body('type').optional().isIn(['Percentage', 'Fixed']),
+  body('minOrder').optional().isFloat({ min: 0 }),
+  body('status').optional().isIn(['Active', 'Inactive']),
+], validate, async (req, res) => {
   try {
-    const coupon = await Coupon.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const { code, discount, type, minOrder, expires, status } = req.body;
+    const updateData = {};
+    if (code !== undefined) updateData.code = code;
+    if (discount !== undefined) updateData.discount = discount;
+    if (type !== undefined) updateData.type = type;
+    if (minOrder !== undefined) updateData.minOrder = minOrder;
+    if (expires !== undefined) updateData.expires = expires;
+    if (status !== undefined) updateData.status = status;
+    const coupon = await Coupon.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!coupon) return res.status(404).json({ success: false, message: 'Coupon not found' });
     res.json({ success: true, data: coupon });
   } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ success: false, message: 'A coupon with this code already exists' });
+    }
     serverError(res, error);
   }
 });
@@ -143,9 +160,20 @@ router.post('/campaigns', [
   }
 });
 
-router.put('/campaigns/:id', async (req, res) => {
+router.put('/campaigns/:id', [
+  body('name').optional().trim().notEmpty().withMessage('Name cannot be empty').isLength({ max: 100 }),
+  body('type').optional().isIn(['Email', 'SMS', 'Social', 'Other']),
+  body('content').optional().trim(),
+  body('status').optional().isIn(['Active', 'Inactive']),
+], validate, async (req, res) => {
   try {
-    const campaign = await Campaign.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const { name, type, content, status } = req.body;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (type !== undefined) updateData.type = type;
+    if (content !== undefined) updateData.content = content;
+    if (status !== undefined) updateData.status = status;
+    const campaign = await Campaign.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!campaign) return res.status(404).json({ success: false, message: 'Campaign not found' });
     res.json({ success: true, data: campaign });
   } catch (error) {
@@ -192,9 +220,32 @@ router.post('/promotions', [
   }
 });
 
-router.put('/promotions/:id', async (req, res) => {
+router.put('/promotions/:id', [
+  body('title').optional().trim().notEmpty().withMessage('Title cannot be empty').isLength({ max: 100 }),
+  body('image').optional().trim().notEmpty().withMessage('Image cannot be empty'),
+  body('link').optional().trim(),
+  body('location').optional().trim().notEmpty().withMessage('Location cannot be empty'),
+  body('startDate').optional().isISO8601().withMessage('Invalid start date'),
+  body('endDate').optional().isISO8601().withMessage('Invalid end date')
+    .custom((value, { req }) => {
+      if (value && req.body.startDate && new Date(value) <= new Date(req.body.startDate)) {
+        throw new Error('End date must be after start date');
+      }
+      return true;
+    }),
+  body('status').optional().isIn(['Active', 'Inactive']),
+], validate, async (req, res) => {
   try {
-    const promotion = await Promotion.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const { title, image, link, location, startDate, endDate, status } = req.body;
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (image !== undefined) updateData.image = image;
+    if (link !== undefined) updateData.link = link;
+    if (location !== undefined) updateData.location = location;
+    if (startDate !== undefined) updateData.startDate = startDate;
+    if (endDate !== undefined) updateData.endDate = endDate;
+    if (status !== undefined) updateData.status = status;
+    const promotion = await Promotion.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!promotion) return res.status(404).json({ success: false, message: 'Promotion not found' });
     res.json({ success: true, data: promotion });
   } catch (error) {
