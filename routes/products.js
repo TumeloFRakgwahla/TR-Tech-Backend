@@ -1,4 +1,5 @@
 const express = require('express');
+const validator = require('validator');
 const { serverError, badRequest } = require('../utils/response');
 const { sendPaginated } = require('../utils/pagination');
 const router = express.Router();
@@ -15,6 +16,19 @@ const {
   deleteProduct,
 } = require('../services/productService');
 
+const unescapeUrl = (url) => (url ? validator.unescape(url) : url);
+
+const sanitizeProductUrls = (product) => {
+  if (!product) return product;
+  if (Array.isArray(product)) {
+    return product.map(sanitizeProductUrls);
+  }
+  const p = product.toObject ? product.toObject() : { ...product };
+  if (p.image) p.image = unescapeUrl(p.image);
+  if (Array.isArray(p.images)) p.images = p.images.map(unescapeUrl);
+  return p;
+};
+
 const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
   body('description').trim().notEmpty().withMessage('Product description is required').isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
@@ -30,7 +44,7 @@ router.get('/low-stock', authenticateAdmin, async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 10;
     const products = await Product.find({ stock: { $lte: threshold }, status: 'Active' }).sort({ stock: 1 });
-    res.json({ success: true, count: products.length, data: products });
+    res.json({ success: true, count: products.length, data: sanitizeProductUrls(products) });
   } catch (error) {
     serverError(res, error);
   }
@@ -62,7 +76,7 @@ router.get('/', async (req, res) => {
 
     const { products, total } = await getProducts(query, pageNum, limitNum);
 
-    sendPaginated(res, products, total, pageNum, limitNum);
+    sendPaginated(res, sanitizeProductUrls(products), total, pageNum, limitNum);
   } catch (error) {
     serverError(res, error);
   }
@@ -74,7 +88,7 @@ router.get('/:id', async (req, res) => {
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
-    res.json({ success: true, data: product });
+    res.json({ success: true, data: sanitizeProductUrls(product) });
   } catch (error) {
     serverError(res, error);
   }
@@ -82,13 +96,13 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', authenticateAdmin, productValidation, validate, async (req, res) => {
   try {
-    const { name, description, category, brand, price, condition, image, stock, status } = req.body;
+    const { name, description, category, brand, price, condition, image, images, stock, status } = req.body;
     const product = await createProduct({
       name, description, category, brand, price, condition,
-      image, stock,
+      image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock,
       status: status || 'Active',
     });
-    res.status(201).json({ success: true, data: product });
+    res.status(201).json({ success: true, data: sanitizeProductUrls(product) });
   } catch (error) {
     badRequest(res, error);
   }
@@ -96,14 +110,15 @@ router.post('/', authenticateAdmin, productValidation, validate, async (req, res
 
 router.put('/:id', authenticateAdmin, productValidation, validate, async (req, res) => {
   try {
-    const { name, description, category, brand, price, condition, image, stock, status } = req.body;
+    const { name, description, category, brand, price, condition, image, images, stock, status } = req.body;
     const product = await updateProduct(req.params.id, {
-      name, description, category, brand, price, condition, image, stock, status
+      name, description, category, brand, price, condition,
+      image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock, status
     });
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
-    res.json({ success: true, data: product });
+    res.json({ success: true, data: sanitizeProductUrls(product) });
   } catch (error) {
     badRequest(res, error);
   }

@@ -95,6 +95,30 @@ describe('Products', () => {
       expect(res.body.data.name).toBe('New Product');
     });
 
+    it('should create product with images array', async () => {
+      const res = await request(app)
+        .post('/api/v1/products')
+        .set('Cookie', `adminAuthToken=${adminAuthToken}`)
+        .send({
+          name: 'Product With Images',
+          description: 'Description with images',
+          category: 'Laptops',
+          brand: 'Other',
+          price: 1999,
+          condition: 'New',
+          stock: 5,
+          status: 'Active',
+          image: 'https://example.com/main.jpg',
+          images: ['https://example.com/1.jpg', 'https://example.com/2.jpg'],
+        });
+
+      expect(res.statusCode).toEqual(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.image).toBe('https://example.com/main.jpg');
+      expect(Array.isArray(res.body.data.images)).toBe(true);
+      expect(res.body.data.images).toContain('https://example.com/1.jpg');
+    });
+
     it('should fail without auth', async () => {
       const res = await request(app)
         .post('/api/v1/products')
