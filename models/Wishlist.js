@@ -7,10 +7,16 @@ const wishlistSchema = new mongoose.Schema({
     required: true,
     unique: true,
   },
-  products: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-  }],
+  products: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Product',
+    }],
+    validate: {
+      validator: (v) => v.length <= 100,
+      message: 'A wishlist cannot contain more than 100 products',
+    },
+  },
 }, {
   timestamps: true,
   indexes: [

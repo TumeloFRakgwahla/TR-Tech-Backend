@@ -38,9 +38,15 @@ const productSchema = new mongoose.Schema({
     type: String,
     default: 'https://placehold.co/100x100/3b82f6/white?text=TR'
   },
-  images: [{
-    type: String,
-  }],
+  images: {
+    type: [{
+      type: String,
+    }],
+    validate: {
+      validator: (v) => v.length <= 20,
+      message: 'A product cannot have more than 20 images',
+    },
+  },
   stock: {
     type: Number,
     required: [true, 'Stock quantity is required'],

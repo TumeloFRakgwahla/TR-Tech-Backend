@@ -5,7 +5,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Repair = require('../models/Repair');
-const { authenticateAdmin } = require('../middleware/auth');
+const { authenticateAdmin, authenticate } = require('../middleware/auth');
 const { toSafeString } = require('../utils/query');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
 
@@ -43,6 +43,23 @@ router.post('/', repairLimiter, repairValidation, validate, async (req, res) => 
     res.status(201).json({ success: true, data: repair });
   } catch (error) {
     badRequest(res, error);
+  }
+});
+
+router.get('/my-repairs', authenticate, async (req, res) => {
+  try {
+    const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+    const skip = (pageNum - 1) * limitNum;
+
+    const [repairs, total] = await Promise.all([
+      Repair.find({ 'customer.email': req.user.email }).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+      Repair.countDocuments({ 'customer.email': req.user.email }),
+    ]);
+
+    sendPaginated(res, repairs, total, pageNum, limitNum);
+  } catch (error) {
+    serverError(res, error);
   }
 });
 
