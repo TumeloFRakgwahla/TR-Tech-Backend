@@ -19,6 +19,7 @@ const contactValidation = [
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 1000 }).withMessage('Message cannot exceed 1000 characters')
 ];
 
+// Submit a new contact form message. Rate limited to prevent spam.
 router.post('/', contactLimiter, contactValidation, validate, async (req, res) => {
   try {
     const contact = await Contact.create(req.body);
@@ -28,6 +29,7 @@ router.post('/', contactLimiter, contactValidation, validate, async (req, res) =
   }
 });
 
+// List all contact messages. Admin-only with optional status filter.
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const status = toSafeString(req.query.status);
@@ -50,6 +52,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get a single contact message by ID. Admin-only.
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const contact = await Contact.findById(req.params.id);
@@ -62,6 +65,7 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Update contact message status. Admin-only.
 router.put('/:id', authenticateAdmin, [
   body('status').optional().isIn(['New', 'Read', 'Replied', 'Closed']).withMessage('Invalid status')
 ], validate, async (req, res) => {
@@ -83,6 +87,7 @@ router.put('/:id', authenticateAdmin, [
   }
 });
 
+// Delete a contact message by ID. Admin-only.
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const contact = await Contact.findByIdAndDelete(req.params.id);

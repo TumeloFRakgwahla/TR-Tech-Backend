@@ -7,6 +7,7 @@ const Cart = require('../models/Cart');
 const Product = require('../models/Product');
 const { authenticate } = require('../middleware/auth');
 
+// Validation for adding/updating cart items.
 const cartItemValidation = [
   body('product').notEmpty().withMessage('Product ID is required'),
   body('name').optional().trim().isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
@@ -20,6 +21,8 @@ const productIdValidation = [
   param('productId').notEmpty().withMessage('Product ID is required')
 ];
 
+// Get the authenticated user's cart items.
+// Creates an empty cart if one does not exist yet.
 router.get('/', authenticate, async (req, res) => {
   try {
     let cart = await Cart.findOne({ user: req.user._id });
@@ -32,6 +35,8 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// Add an item to the cart.
+// Validates stock availability before adding. Merges with existing item if present.
 router.post('/', authenticate, cartItemValidation, validate, async (req, res) => {
   try {
     const { product, name, condition, price, quantity, image } = req.body;
@@ -90,6 +95,8 @@ router.post('/', authenticate, cartItemValidation, validate, async (req, res) =>
   }
 });
 
+// Update the quantity of a cart item.
+// Validates against current stock before updating.
 router.put('/:productId', authenticate, productIdValidation, validate, async (req, res) => {
   try {
     const { quantity } = req.body;
@@ -133,6 +140,7 @@ router.put('/:productId', authenticate, productIdValidation, validate, async (re
   }
 });
 
+// Remove a single item from the cart by product ID.
 router.delete('/:productId', authenticate, productIdValidation, async (req, res) => {
   try {
     const productId = req.params.productId;
@@ -153,6 +161,7 @@ router.delete('/:productId', authenticate, productIdValidation, async (req, res)
   }
 });
 
+// Remove all items from the cart.
 router.delete('/', authenticate, async (req, res) => {
   try {
     const cart = await Cart.findOne({ user: req.user._id });

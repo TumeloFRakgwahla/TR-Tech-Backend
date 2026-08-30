@@ -2,6 +2,22 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
+/**
+ * User Mongoose Model
+ *
+ * Represents a registered user (customer or admin) in the system.
+ *
+ * Security-relevant fields:
+ * - password: stored as bcrypt hash; select: false prevents accidental leakage in queries
+ * - failedLoginAttempts / lockUntil: brute-force protection
+ * - emailVerificationToken / emailVerificationExpires: email verification flow
+ * - isActive: soft-delete flag for deactivated accounts
+ *
+ * Indexes optimize:
+ * - email lookups for login and uniqueness
+ * - role queries for admin dashboards
+ * - createdAt for sorting
+ */
 const userSchema = new mongoose.Schema({
   firstName: {
     type: String,
@@ -82,7 +98,7 @@ const userSchema = new mongoose.Schema({
   ]
 });
 
-// Hash password before saving
+// Hash password before saving. Only re-hashes if the password field has been modified.
 userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) {
     return next();
@@ -91,12 +107,12 @@ userSchema.pre('save', async function(next) {
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-// Compare password method
+// Compare a plaintext password against the stored bcrypt hash.
 userSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Remove password from JSON output
+// Remove password from JSON output. Ensures the password hash is never sent to the client.
 userSchema.methods.toJSON = function() {
   const user = this.toObject();
   delete user.password;
@@ -108,8 +124,9 @@ userSchema.methods.isLocked = function() {
   return !!(this.lockUntil && this.lockUntil > Date.now());
 };
 
-// Generate a single-use email verification token (raw returned to caller for emailing;
-// only the SHA-256 hash is persisted).
+// Generate a single-use email verification token.
+// The raw token is returned to the caller for emailing; only the SHA-256 hash is persisted.
+// This way, if the database is leaked, the raw token cannot be reconstructed.
 userSchema.methods.generateEmailVerificationToken = function() {
   const token = crypto.randomBytes(32).toString('hex');
   this.emailVerificationToken = crypto.createHash('sha256').update(token).digest('hex');

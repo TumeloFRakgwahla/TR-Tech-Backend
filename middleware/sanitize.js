@@ -1,3 +1,5 @@
+// Removes control characters (C0/C1) and trims whitespace from string inputs.
+// Prevents injection attacks that rely on non-printable characters.
 const sanitizeString = (value) => {
   if (typeof value !== 'string') return value;
   return value
@@ -5,6 +7,8 @@ const sanitizeString = (value) => {
     .trim();
 };
 
+// Recursively sanitizes strings, arrays, and plain objects.
+// Nested objects (e.g., req.body.customer.address) are handled automatically.
 const sanitizeValue = (value) => {
   if (typeof value === 'string') {
     return sanitizeString(value);
@@ -22,6 +26,7 @@ const sanitizeValue = (value) => {
   return value;
 };
 
+// Express middleware that sanitizes req.body in place before validation runs.
 const sanitize = (req, res, next) => {
   if (req.body && typeof req.body === 'object') {
     req.body = sanitizeValue(req.body);

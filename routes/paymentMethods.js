@@ -9,7 +9,7 @@ const { serverError } = require('../utils/response');
 // All payment-method routes are authenticated and strictly scoped to req.user._id.
 router.use(authenticate);
 
-// List the current user's saved methods.
+// List the current user's saved payment methods, sorted by default first.
 router.get('/', async (req, res) => {
   try {
     const methods = await PaymentMethod.find({ userId: req.user._id })
@@ -20,7 +20,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Add a method. `gatewayToken` is the opaque token returned by the gateway's
+// Add a payment method. `gatewayToken` is the opaque token returned by the gateway's
 // client-side SDK after it tokenizes the real card — we never see raw card data.
 router.post('/', [
   body('gateway').isIn(['stripe', 'paystack', 'flutterwave', 'manual']).withMessage('Invalid gateway'),
@@ -55,7 +55,7 @@ router.post('/', [
   }
 });
 
-// Mark a method as default (must belong to the user).
+// Mark a payment method as default (must belong to the user).
 router.post('/:id/default', async (req, res) => {
   try {
     const method = await PaymentMethod.findOne({ _id: req.params.id, userId: req.user._id });
@@ -71,7 +71,7 @@ router.post('/:id/default', async (req, res) => {
   }
 });
 
-// Delete a method (must belong to the user).
+// Delete a payment method (must belong to the user).
 router.delete('/:id', async (req, res) => {
   try {
     const method = await PaymentMethod.findOneAndDelete({ _id: req.params.id, userId: req.user._id });

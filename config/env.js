@@ -1,5 +1,7 @@
 const z = require('zod');
 
+// Environment variable schema validated with Zod.
+// All required variables are checked at startup; missing or invalid values cause an immediate exit.
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().default(5000),
@@ -8,6 +10,7 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url('FRONTEND_URL must be a valid URL').default('http://localhost:5173'),
 });
 
+// Parse and validate environment variables. Called at application startup.
 const parseEnv = () => {
   try {
     return envSchema.parse(process.env);

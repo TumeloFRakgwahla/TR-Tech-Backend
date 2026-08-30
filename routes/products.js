@@ -16,8 +16,11 @@ const {
   deleteProduct,
 } = require('../services/productService');
 
+// Decodes percent-encoded URL strings. Used because product image URLs may be
+// double-encoded when stored or passed through query parameters.
 const unescapeUrl = (url) => (url ? validator.unescape(url) : url);
 
+// Recursively unescapes image URLs in a product or array of products.
 const sanitizeProductUrls = (product) => {
   if (!product) return product;
   if (Array.isArray(product)) {
@@ -40,6 +43,7 @@ const productValidation = [
   body('status').optional().trim().isIn(['Active', 'Inactive', 'Out of Stock']).withMessage('Invalid status')
 ];
 
+// Get products with stock at or below the threshold. Admin-only for inventory management.
 router.get('/low-stock', authenticateAdmin, async (req, res) => {
   try {
     const threshold = parseInt(req.query.threshold) || 10;
@@ -50,6 +54,8 @@ router.get('/low-stock', authenticateAdmin, async (req, res) => {
   }
 });
 
+// List products with optional filtering, search, and pagination.
+// Public endpoint so the shop page can browse the catalog.
 router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -82,6 +88,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get a single product by ID. Public endpoint for product detail pages.
 router.get('/:id', async (req, res) => {
   try {
     const product = await getProductById(req.params.id);
@@ -94,6 +101,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Create a new product. Admin-only.
 router.post('/', authenticateAdmin, productValidation, validate, async (req, res) => {
   try {
     const { name, description, category, brand, price, condition, image, images, stock, status } = req.body;
@@ -108,6 +116,7 @@ router.post('/', authenticateAdmin, productValidation, validate, async (req, res
   }
 });
 
+// Update a product by ID. Admin-only.
 router.put('/:id', authenticateAdmin, productValidation, validate, async (req, res) => {
   try {
     const { name, description, category, brand, price, condition, image, images, stock, status } = req.body;
@@ -124,6 +133,7 @@ router.put('/:id', authenticateAdmin, productValidation, validate, async (req, r
   }
 });
 
+// Delete a product by ID. Admin-only.
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const product = await deleteProduct(req.params.id);

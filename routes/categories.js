@@ -21,6 +21,7 @@ const categoryValidation = [
   body('status').optional().trim().isIn(['Active', 'Inactive']),
 ];
 
+// Get all active categories for public display (e.g., shop filter dropdown).
 router.get('/active', async (req, res) => {
   try {
     const categories = await Category.find({ status: 'Active' }).sort({ name: 1 });
@@ -30,8 +31,10 @@ router.get('/active', async (req, res) => {
   }
 });
 
+// All routes below this middleware require admin authentication.
 router.use(authenticateAdmin);
 
+// List categories with optional search, status filter, and pagination.
 router.get('/', async (req, res) => {
   try {
     const { search, status, limit = 50, page = 1 } = req.query;
@@ -52,6 +55,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get a single category by ID. Admin-only.
 router.get('/:id', async (req, res) => {
   try {
     const category = await getCategoryById(req.params.id);
@@ -64,6 +68,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Create a new category. Admin-only.
 router.post('/', categoryValidation, validate, async (req, res) => {
   try {
     const { name, slug, status } = req.body;
@@ -77,6 +82,7 @@ router.post('/', categoryValidation, validate, async (req, res) => {
   }
 });
 
+// Update a category by ID. Admin-only.
 router.put('/:id', [
   body('name').optional().trim().notEmpty().withMessage('Category name cannot be empty').isLength({ max: 100 }),
   body('slug').optional().trim().isLength({ max: 100 }),
@@ -96,6 +102,7 @@ router.put('/:id', [
   }
 });
 
+// Delete a category by ID. Admin-only.
 router.delete('/:id', async (req, res) => {
   try {
     const category = await deleteCategory(req.params.id);

@@ -8,6 +8,9 @@ if (!JWT_SECRET) {
   throw new Error('JWT_SECRET environment variable is required');
 }
 
+// authenticate: required middleware for protected user routes.
+// Verifies the JWT from the authToken cookie, checks the user exists and is active,
+// and validates the session has not been revoked. Attaches req.user on success.
 const authenticate = async (req, res, next) => {
   try {
     const token = req.cookies?.authToken;
@@ -44,6 +47,8 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+// authorize: role-based access control middleware factory.
+// Usage: authorize('admin', 'manager') — allows only users with one of the specified roles.
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -58,6 +63,8 @@ const authorize = (...allowedRoles) => {
   };
 };
 
+// optionalAuthenticate: like authenticate but does not reject unauthenticated requests.
+// Used for endpoints that behave differently for logged-in users (e.g., guest checkout).
 const optionalAuthenticate = async (req, res, next) => {
   try {
     const token = req.cookies?.authToken;
@@ -79,6 +86,9 @@ const optionalAuthenticate = async (req, res, next) => {
   next();
 };
 
+// authenticateAdmin: required middleware for admin-only routes.
+// Reads the adminAuthToken cookie, verifies the JWT, ensures the user is active,
+// checks the role is 'admin', and validates the session is still active.
 const authenticateAdmin = async (req, res, next) => {
   try {
     const token = req.cookies?.adminAuthToken;

@@ -1,3 +1,5 @@
+// Standardized 500 error response. Logs the full error server-side but returns
+// a generic message in production to avoid leaking internal details.
 const serverError = (res, error) => {
   console.error(error);
   const isProd = process.env.NODE_ENV === 'production';
@@ -7,7 +9,8 @@ const serverError = (res, error) => {
   });
 };
 
-// 400 responses: avoid leaking internal error details (e.g. Mongo messages) in production.
+// Standardized 400 error response. Prevents leaking MongoDB/Mongoose validation
+// messages to clients in production.
 const badRequest = (res, error) => {
   const isProd = process.env.NODE_ENV === 'production';
   res.status(400).json({

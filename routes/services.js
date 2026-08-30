@@ -15,6 +15,7 @@ const serviceValidation = [
   body('status').optional().trim().isIn(['Active', 'Inactive']).withMessage('Invalid status')
 ];
 
+// List services with optional category/status filter and pagination. Public endpoint.
 router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -49,6 +50,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Get a single service by ID. Public endpoint.
 router.get('/:id', async (req, res) => {
   try {
     const service = await Service.findById(req.params.id);
@@ -61,6 +63,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+// Create a new service. Admin-only.
 router.post('/', authenticateAdmin, serviceValidation, validate, async (req, res) => {
   try {
     const { name, description, category, price, estimatedTime, image, icon, features, status } = req.body;
@@ -75,6 +78,7 @@ router.post('/', authenticateAdmin, serviceValidation, validate, async (req, res
   }
 });
 
+// Update a service by ID. Admin-only.
 router.put('/:id', authenticateAdmin, serviceValidation, validate, async (req, res) => {
   try {
     const { name, description, category, price, estimatedTime, image, icon, features, status } = req.body;
@@ -92,6 +96,7 @@ router.put('/:id', authenticateAdmin, serviceValidation, validate, async (req, r
   }
 });
 
+// Delete a service by ID. Admin-only.
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const service = await Service.findByIdAndDelete(req.params.id);

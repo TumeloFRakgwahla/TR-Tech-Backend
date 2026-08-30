@@ -34,6 +34,8 @@ const routeRegistry = [
   { path: '/api/v1/wishlist', routes: wishlistRoutes },
 ];
 
+// registerRoutes mounts all route modules under /api/v1 with CSRF protection.
+// CSRF is skipped in test mode to avoid setup complexity.
 const registerRoutes = (app) => {
   const isTest = process.env.NODE_ENV === 'test';
   const csrfMiddleware = isTest ? (req, res, next) => next() : csrfProtection;

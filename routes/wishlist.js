@@ -4,6 +4,7 @@ const router = express.Router();
 const Wishlist = require('../models/Wishlist');
 const { authenticate } = require('../middleware/auth');
 
+// Get the authenticated user's wishlist with populated product details.
 router.get('/', authenticate, async (req, res) => {
   try {
     let wishlist = await Wishlist.findOne({ user: req.user._id }).populate('products');
@@ -16,6 +17,8 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
+// Check if a specific product is in the user's wishlist.
+// Returns { success: true, inWishlist: boolean }.
 router.get('/check/:productId', authenticate, async (req, res) => {
   try {
     const wishlist = await Wishlist.findOne({ user: req.user._id });
@@ -28,6 +31,8 @@ router.get('/check/:productId', authenticate, async (req, res) => {
   }
 });
 
+// Add a product to the user's wishlist.
+// Creates the wishlist document if it does not exist yet.
 router.post('/:productId', authenticate, async (req, res) => {
   try {
     const Product = require('../models/Product');
@@ -52,6 +57,7 @@ router.post('/:productId', authenticate, async (req, res) => {
   }
 });
 
+// Remove a product from the user's wishlist.
 router.delete('/:productId', authenticate, async (req, res) => {
   try {
     const wishlist = await Wishlist.findOne({ user: req.user._id });

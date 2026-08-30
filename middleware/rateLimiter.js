@@ -7,6 +7,8 @@ const passthrough = () => (req, res, next) => next();
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
+// Auth limiter: restricts login and registration attempts to prevent credential stuffing.
+// 20 attempts per 15 minutes per IP in production.
 const createAuthLimiter = () => {
   if (isTest || isDevelopment) return passthrough();
   return rateLimit({
@@ -18,6 +20,8 @@ const createAuthLimiter = () => {
   });
 };
 
+// General API limiter: protects all API routes from abuse.
+// 100 requests per 15 minutes per IP in production.
 const createApiLimiter = () => {
   if (isTest || isDevelopment) return passthrough();
   return rateLimit({
@@ -29,7 +33,8 @@ const createApiLimiter = () => {
   });
 };
 
-// For public, unauthenticated write endpoints (contact form, repair bookings).
+// Public limiter: for unauthenticated write endpoints (contact form, repair bookings).
+// Stricter limit of 10 requests per 15 minutes to prevent spam.
 const createPublicLimiter = () => {
   if (isTest || isDevelopment) return passthrough();
   return rateLimit({

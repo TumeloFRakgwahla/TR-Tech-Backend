@@ -30,6 +30,8 @@ const orderUpdateValidation = [
   body('paymentStatus').optional().isIn(['Pending', 'Paid', 'Refunded']).withMessage('Invalid payment status')
 ];
 
+// Aggregation pipeline for order statistics.
+// Computes revenue, unique customer count, and products sold for a given date range.
 const buildStatsPipeline = (matchStage) => [
   { $match: matchStage },
   { $unwind: { path: '$items', preserveNullAndEmptyArrays: true } },
@@ -51,6 +53,7 @@ const buildStatsPipeline = (matchStage) => [
   },
 ];
 
+// Get the authenticated user's own orders with pagination.
 router.get('/my-orders', optionalAuthenticate, async (req, res) => {
   try {
     if (!req.user) {
@@ -71,6 +74,8 @@ router.get('/my-orders', optionalAuthenticate, async (req, res) => {
   }
 });
 
+// Get a single order belonging to the authenticated user.
+// Ensures the order belongs to the requesting user (authorization check).
 router.get('/my-orders/:id', optionalAuthenticate, async (req, res) => {
   try {
     if (!req.user) {
@@ -86,6 +91,8 @@ router.get('/my-orders/:id', optionalAuthenticate, async (req, res) => {
   }
 });
 
+// Get order statistics for the admin dashboard.
+// Compares current month vs previous month for revenue, orders, customers, and products sold.
 router.get('/stats', authenticateAdmin, async (req, res) => {
   try {
     const now = new Date();
@@ -136,6 +143,7 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
   }
 });
 
+// List all orders for admin with optional status filter and pagination.
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
@@ -155,6 +163,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get a single order by ID. Admin-only.
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const order = await getOrderById(req.params.id);
@@ -167,6 +176,8 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Create a new order. Public endpoint (optional auth for user tracking).
+// Stock is deducted atomically in orderService.createOrder.
 router.post('/', optionalAuthenticate, orderItemValidation, validate, async (req, res) => {
   try {
     const { items, customer, paymentMethod, notes } = req.body;
@@ -183,6 +194,7 @@ router.post('/', optionalAuthenticate, orderItemValidation, validate, async (req
   }
 });
 
+// Update order status or payment status. Admin-only.
 router.put('/:id', authenticateAdmin, orderUpdateValidation, validate, async (req, res) => {
   try {
     const { status, paymentStatus, notes } = req.body;
@@ -202,6 +214,7 @@ router.put('/:id', authenticateAdmin, orderUpdateValidation, validate, async (re
   }
 });
 
+// Delete an order by ID. Admin-only.
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const order = await deleteOrder(req.params.id);

@@ -9,6 +9,9 @@ if (!JWT_SECRET) {
 
 const TOKEN_TTL_DAYS = 30;
 
+// Creates a new session record and issues a signed JWT.
+// The JWT contains the user ID and a unique token identifier (jti).
+// The session is stored in MongoDB so it can be revoked independently of the JWT expiry.
 async function issueSession(user, req) {
   const jti = crypto.randomBytes(16).toString('hex');
   const expiresAt = new Date(Date.now() + TOKEN_TTL_DAYS * 24 * 60 * 60 * 1000);
@@ -25,6 +28,8 @@ async function issueSession(user, req) {
   return jwt.sign({ id: user._id, jti }, JWT_SECRET, { expiresIn: `${TOKEN_TTL_DAYS}d` });
 }
 
+// Revokes a session by marking it inactive. Used during logout.
+// The JWT may still be cryptographically valid, but the session check in authenticate() will reject it.
 async function revokeSession(jti, userId) {
   if (!jti) return;
   await Session.updateOne(
@@ -33,6 +38,7 @@ async function revokeSession(jti, userId) {
   );
 }
 
+// Checks whether a given session (jti + userId) is still active.
 async function isSessionActive(jti, userId) {
   if (!jti) {
     return false;

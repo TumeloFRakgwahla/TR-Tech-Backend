@@ -1,4 +1,4 @@
-const express = require('express');
+require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const path = require('path');
@@ -11,6 +11,7 @@ const registerRoutes = require('./routes');
 
 const app = express();
 
+// Assign a unique request ID to every incoming request for distributed tracing and log correlation.
 app.use(requestId);
 
 // Trust the single proxy in front of the app (Nginx, Heroku, ELB, etc.) so that
@@ -33,6 +34,12 @@ const connectSrc = isDev
   ? ["'self'", "https://wa.me", "https://api.trtech.co.za"]
   : ["'self'", "https://wa.me", "https://api.trtech.co.za"];
 
+// Helmet sets security-related HTTP headers. The CSP below is intentionally strict:
+// - defaultSrc 'self': blocks all external resources by default
+// - scriptSrc allows WhatsApp embed scripts and inline styles for font loading
+// - imgSrc allows data URIs and HTTPS images for product images
+// - connectSrc allows API calls to the backend and WhatsApp
+// - frameSrc/frameAncestors prevent clickjacking
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -58,11 +65,14 @@ app.use(helmet({
 
 app.use(createApiLimiter());
 
+// Limit request body size to 100KB to mitigate large-payload attacks and reduce memory usage.
 app.use(express.json({ limit: '100kb' }));
 app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 app.use(cookieParser());
 app.use(sanitize);
 
+// Serve uploaded files with explicit CORS/CORP headers so the frontend can load them
+// even when the backend is on a different origin.
 app.use('/uploads', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'http://localhost:5173');
   res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -75,6 +85,9 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(path.join(__dirname, 'uploads')));
 
+// CSRF endpoint: generates a random token, stores it in an HTTP-only cookie, and returns it
+// to the client. The client must send this token back in the X-CSRF-Token header for
+// non-GET requests. This double-submit cookie pattern prevents CSRF without server-side state.
 app.get('/api/csrf-token', (req, res) => {
   const token = crypto.randomBytes(32).toString('hex');
   res.cookie('csrf_token', token, {
@@ -91,6 +104,9 @@ app.get('/api/v1/health', (req, res) => {
   res.json({ status: 'OK', message: 'TR-Tech Backend is running' });
 });
 
+// Centralized error-handling middleware. Must be registered after all routes.
+// - 400/parse errors: invalid JSON payload
+// - 5xx errors: generic message in production, full stack in development
 app.use((err, req, res, next) => {
   console.error(err.stack);
   if (err.type === 'entity.parse.failed') {

@@ -12,6 +12,8 @@ const router = express.Router();
 
 const authLimiter = createAuthLimiter();
 
+// Register a new customer account.
+// Rate limited to prevent abuse. Generates an email verification token.
 router.post('/register', authLimiter, [
   body('firstName').trim().notEmpty().withMessage('First name is required').isLength({ max: 50 }).withMessage('First name cannot exceed 50 characters'),
   body('lastName').trim().notEmpty().withMessage('Last name is required').isLength({ max: 50 }).withMessage('Last name cannot exceed 50 characters'),
@@ -77,6 +79,8 @@ router.post('/register', authLimiter, [
   }
 });
 
+// Login for customer accounts.
+// Implements account lockout after 5 failed attempts (15-minute cooldown).
 router.post('/login', authLimiter, [
   body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
   body('password').notEmpty().withMessage('Password is required')
@@ -156,6 +160,7 @@ router.post('/login', authLimiter, [
   }
 });
 
+// Get the currently authenticated user's profile.
 router.get('/me', authenticate, async (req, res) => {
   res.json({
     success: true,
@@ -171,6 +176,7 @@ router.get('/me', authenticate, async (req, res) => {
   });
 });
 
+// Logout the current user by revoking the session and clearing cookies.
 router.post('/logout', async (req, res) => {
   try {
     const token = req.cookies?.authToken;
@@ -197,6 +203,7 @@ router.post('/logout', async (req, res) => {
   }
 });
 
+// Update the authenticated user's profile (name, phone, address).
 router.put('/updateprofile', authenticate, [
   body('firstName').optional().trim().notEmpty().withMessage('First name cannot be empty').isLength({ max: 50 }).withMessage('First name cannot exceed 50 characters'),
   body('lastName').optional().trim().notEmpty().withMessage('Last name cannot be empty').isLength({ max: 50 }).withMessage('Last name cannot exceed 50 characters'),
@@ -235,6 +242,8 @@ router.put('/updateprofile', authenticate, [
   }
 });
 
+// Verify email using the token sent to the user.
+// Looks up the SHA-256 hash of the token and marks the email as verified.
 router.post('/verify-email', [
   body('token').notEmpty().withMessage('Token is required'),
 ], validate, async (req, res) => {
@@ -258,6 +267,8 @@ router.post('/verify-email', [
   }
 });
 
+// Resend the email verification link.
+// Always returns success to prevent user enumeration.
 router.post('/resend-verification', [
   body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
 ], validate, async (req, res) => {
@@ -276,6 +287,7 @@ router.post('/resend-verification', [
   }
 });
 
+// Admin login route. Requires role === 'admin'.
 router.post('/admin/login', authLimiter, [
   body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
   body('password').notEmpty().withMessage('Password is required')
@@ -361,6 +373,7 @@ router.post('/admin/login', authLimiter, [
   }
 });
 
+// Get the currently authenticated admin's profile.
 router.get('/admin/me', authenticateAdmin, async (req, res) => {
   res.json({
     success: true,
@@ -376,6 +389,7 @@ router.get('/admin/me', authenticateAdmin, async (req, res) => {
   });
 });
 
+// Logout the current admin by revoking the session and clearing cookies.
 router.post('/admin/logout', async (req, res) => {
   try {
     const token = req.cookies?.adminAuthToken;
