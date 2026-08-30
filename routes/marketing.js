@@ -10,6 +10,7 @@ const { serverError } = require('../utils/response');
 const { sendPaginated } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/query');
 
+// Public endpoint: list active coupons with optional search.
 router.get('/coupons', async (req, res) => {
   try {
     const { search, limit = 50, page = 1 } = req.query;
@@ -34,6 +35,7 @@ router.get('/coupons', async (req, res) => {
   }
 });
 
+// Public endpoint: list active campaigns with optional search.
 router.get('/campaigns', async (req, res) => {
   try {
     const { search, limit = 50, page = 1 } = req.query;
@@ -57,6 +59,7 @@ router.get('/campaigns', async (req, res) => {
   }
 });
 
+// Public endpoint: list active promotions with optional search.
 router.get('/promotions', async (req, res) => {
   try {
     const { search, limit = 50, page = 1 } = req.query;
@@ -80,8 +83,10 @@ router.get('/promotions', async (req, res) => {
   }
 });
 
+// All routes below this middleware require admin authentication.
 router.use(authenticateAdmin);
 
+// Create a coupon. Admin-only.
 router.post('/coupons', [
   body('code').trim().notEmpty().withMessage('Code is required').isLength({ max: 50 }),
   body('discount').isFloat({ min: 0 }).withMessage('Discount must be a non-negative number'),
@@ -106,6 +111,7 @@ router.post('/coupons', [
   }
 });
 
+// Update a coupon by ID. Admin-only.
 router.put('/coupons/:id', [
   body('code').optional().trim().notEmpty().withMessage('Code cannot be empty').isLength({ max: 50 }),
   body('discount').optional().isFloat({ min: 0 }).withMessage('Discount must be a non-negative number'),
@@ -133,6 +139,7 @@ router.put('/coupons/:id', [
   }
 });
 
+// Delete a coupon by ID. Admin-only.
 router.delete('/coupons/:id', async (req, res) => {
   try {
     const coupon = await Coupon.findByIdAndDelete(req.params.id);
@@ -143,6 +150,7 @@ router.delete('/coupons/:id', async (req, res) => {
   }
 });
 
+// Create a campaign. Admin-only.
 router.post('/campaigns', [
   body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }),
   body('type').optional().isIn(['Email', 'SMS', 'Social', 'Other']),
@@ -160,6 +168,7 @@ router.post('/campaigns', [
   }
 });
 
+// Update a campaign by ID. Admin-only.
 router.put('/campaigns/:id', [
   body('name').optional().trim().notEmpty().withMessage('Name cannot be empty').isLength({ max: 100 }),
   body('type').optional().isIn(['Email', 'SMS', 'Social', 'Other']),
@@ -181,6 +190,7 @@ router.put('/campaigns/:id', [
   }
 });
 
+// Delete a campaign by ID. Admin-only.
 router.delete('/campaigns/:id', async (req, res) => {
   try {
     const campaign = await Campaign.findByIdAndDelete(req.params.id);
@@ -191,6 +201,8 @@ router.delete('/campaigns/:id', async (req, res) => {
   }
 });
 
+// Create a promotion. Admin-only.
+// Validates that endDate is after startDate if both are provided.
 router.post('/promotions', [
   body('title').trim().notEmpty().withMessage('Title is required').isLength({ max: 100 }),
   body('image').trim().notEmpty().withMessage('Image is required'),
@@ -220,6 +232,7 @@ router.post('/promotions', [
   }
 });
 
+// Update a promotion by ID. Admin-only.
 router.put('/promotions/:id', [
   body('title').optional().trim().notEmpty().withMessage('Title cannot be empty').isLength({ max: 100 }),
   body('image').optional().trim().notEmpty().withMessage('Image cannot be empty'),
@@ -253,6 +266,7 @@ router.put('/promotions/:id', [
   }
 });
 
+// Delete a promotion by ID. Admin-only.
 router.delete('/promotions/:id', async (req, res) => {
   try {
     const promotion = await Promotion.findByIdAndDelete(req.params.id);

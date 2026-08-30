@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+/**
+ * Embedded schema for a single item in a user's cart.
+ * Stores a snapshot of product details (name, condition, price, image)
+ * so the cart remains consistent even if the product changes later.
+ */
 const cartItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
@@ -31,6 +36,12 @@ const cartItemSchema = new mongoose.Schema({
   }
 });
 
+/**
+ * Cart Mongoose Model
+ *
+ * Each user has exactly one cart document (unique index on user).
+ * The cart contains an array of cartItemSchema documents.
+ */
 const cartSchema = new mongoose.Schema({
   user: {
     type: mongoose.Schema.Types.ObjectId,

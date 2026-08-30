@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
 
+/**
+ * Embedded schema for a single item within an order.
+ * Snapshot fields (name, condition, price) are stored at purchase time
+ * so order history remains accurate even if the product changes later.
+ */
 const orderItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
@@ -15,6 +20,17 @@ const orderItemSchema = new mongoose.Schema({
   }
 });
 
+/**
+ * Order Mongoose Model
+ *
+ * Represents a customer purchase containing one or more items.
+ *
+ * Key design decisions:
+ * - Customer details are denormalized into the order so the order remains
+ *   valid even if the user account is deleted or modified.
+ * - Status and paymentStatus are enums to enforce valid state transitions.
+ * - Indexes on status, createdAt, and customer.email support admin filtering and sorting.
+ */
 const orderSchema = new mongoose.Schema({
   customer: {
     name: {

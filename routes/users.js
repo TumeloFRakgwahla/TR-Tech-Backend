@@ -23,6 +23,8 @@ const passwordResetValidation = [
     .matches(/^(?=.*[a-zA-Z])(?=.*\d).+$/).withMessage('Password must contain both letters and numbers'),
 ];
 
+// List all users with optional role filter and search. Admin-only.
+// Password field is explicitly excluded from the response.
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
   const { page = 1, limit = 20 } = req.query;
@@ -56,6 +58,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get a single user by ID. Admin-only. Password field is excluded.
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
@@ -68,6 +71,9 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Update a user by ID. Admin-only.
+// Password is explicitly stripped from the update payload because findByIdAndUpdate
+// does not run the pre('save') hook — a plaintext password would be stored as-is.
 router.put('/:id', authenticateAdmin, userValidation, validate, async (req, res) => {
   try {
     // Strip password from mass-assignment: findByIdAndUpdate does not run the
@@ -87,6 +93,9 @@ router.put('/:id', authenticateAdmin, userValidation, validate, async (req, res)
   }
 });
 
+// Reset a user's password. Admin-only.
+// Uses document.save() so the pre('save') hook hashes the password.
+// Invalidates all active sessions after a password reset.
 router.put('/:id/password', authenticateAdmin, passwordResetValidation, validate, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -108,6 +117,7 @@ router.put('/:id/password', authenticateAdmin, passwordResetValidation, validate
   }
 });
 
+// Delete a user by ID. Admin-only.
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);

@@ -1,5 +1,16 @@
 const mongoose = require('mongoose');
 
+/**
+ * Contact Mongoose Model
+ *
+ * Represents a message submitted through the public contact form.
+ *
+ * Status workflow:
+ * - New: freshly submitted, awaiting review
+ * - Read: admin has seen it
+ * - Replied: admin has responded to the customer
+ * - Closed: resolved, no further action needed
+ */
 const contactSchema = new mongoose.Schema({
   name: {
     type: String,

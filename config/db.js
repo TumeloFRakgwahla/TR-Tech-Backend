@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 
+// Establishes the MongoDB connection using the URI from environment variables.
+// Registers listeners for connection lifecycle events (disconnect, error, reconnect).
+// Exits the process if the initial connection fails, since the app cannot function without the database.
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI);

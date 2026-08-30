@@ -11,6 +11,7 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
+// Multer storage configuration: saves files to the uploads directory with a unique timestamp-based name.
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, uploadsDir);
@@ -22,6 +23,9 @@ const storage = multer.diskStorage({
   }
 });
 
+// Multer upload configuration:
+// - Limits file size to 5MB
+// - Accepts only image files (jpeg, jpg, png, gif, webp) via MIME type and extension check
 const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -36,6 +40,7 @@ const upload = multer({
   }
 });
 
+// Upload a single image. Admin-only.
 router.post('/image', authenticateAdmin, upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
@@ -54,6 +59,7 @@ router.post('/image', authenticateAdmin, upload.single('image'), (req, res) => {
   }
 });
 
+// Upload up to 10 images at once. Admin-only.
 router.post('/images', authenticateAdmin, upload.array('images', 10), (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
@@ -70,6 +76,8 @@ router.post('/images', authenticateAdmin, upload.array('images', 10), (req, res)
   }
 });
 
+// Delete an uploaded image by filename. Admin-only.
+// Validates the filename to prevent path traversal attacks.
 router.delete('/image/:filename', authenticateAdmin, (req, res) => {
   try {
     const filename = req.params.filename;

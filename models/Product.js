@@ -1,3 +1,22 @@
+/**
+ * TR-Tech — Product Mongoose Model
+ *
+ * Represents a product in the e-commerce catalog.
+ *
+ * Key fields:
+ * - name, description, category, brand: product identity and classification
+ * - price: selling price in ZAR
+ * - condition: New, Used, or Refurbished
+ * - image / images: primary image URL and array of additional images
+ * - stock: available quantity; 0 means out of stock
+ * - status: Active, Inactive, or Out of Stock
+ *
+ * Indexes optimize common queries:
+ * - category, brand, status for filter pages
+ * - compound category + status for filtered listings
+ * - text index on name + description for search
+ */
+
 const mongoose = require('mongoose');
 
 const productSchema = new mongoose.Schema({

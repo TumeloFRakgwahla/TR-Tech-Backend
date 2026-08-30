@@ -18,7 +18,7 @@ const addressValidation = [
   body('country').trim().notEmpty().withMessage('Country is required')
 ];
 
-// Profile
+// Get the authenticated user's profile data.
 router.get('/profile', authenticate, async (req, res) => {
   try {
     res.json({
@@ -38,6 +38,7 @@ router.get('/profile', authenticate, async (req, res) => {
   }
 });
 
+// Update the authenticated user's profile (name, phone).
 router.put('/profile', authenticate, [
   body('firstName').optional().trim().notEmpty().withMessage('First name cannot be empty').isLength({ max: 50 }).withMessage('First name cannot exceed 50 characters'),
   body('lastName').optional().trim().notEmpty().withMessage('Last name cannot be empty').isLength({ max: 50 }).withMessage('Last name cannot exceed 50 characters'),
@@ -69,6 +70,8 @@ router.put('/profile', authenticate, [
   }
 });
 
+// Change the user's password. Requires the current password for verification.
+// After a successful change, all other active sessions are revoked for security.
 router.put('/password', authenticate, [
   body('currentPassword').notEmpty().withMessage('Current password is required'),
   body('newPassword')
@@ -101,6 +104,7 @@ router.put('/password', authenticate, [
 });
 
 // Addresses
+// Get all addresses for the authenticated user, sorted by default first.
 router.get('/addresses', authenticate, async (req, res) => {
   try {
     const addresses = await Address.find({ userId: req.user._id }).sort({ isDefault: -1, createdAt: -1 });
@@ -110,6 +114,7 @@ router.get('/addresses', authenticate, async (req, res) => {
   }
 });
 
+// Create a new address for the authenticated user.
 router.post('/addresses', authenticate, addressValidation, validate, async (req, res) => {
   try {
     const addressData = {
@@ -124,6 +129,7 @@ router.post('/addresses', authenticate, addressValidation, validate, async (req,
   }
 });
 
+// Update an existing address. Ensures the address belongs to the authenticated user.
 router.put('/addresses/:id', authenticate, addressValidation, validate, async (req, res) => {
   try {
     const address = await Address.findOne({ _id: req.params.id, userId: req.user._id });
@@ -141,6 +147,7 @@ router.put('/addresses/:id', authenticate, addressValidation, validate, async (r
   }
 });
 
+// Delete an address. Ensures the address belongs to the authenticated user.
 router.delete('/addresses/:id', authenticate, async (req, res) => {
   try {
     const address = await Address.findOne({ _id: req.params.id, userId: req.user._id });
@@ -155,6 +162,8 @@ router.delete('/addresses/:id', authenticate, async (req, res) => {
   }
 });
 
+// Set an address as the default for the user.
+// Clears the default flag from all other addresses first.
 router.post('/addresses/:id/default', authenticate, async (req, res) => {
   try {
     const address = await Address.findOne({ _id: req.params.id, userId: req.user._id });
@@ -173,6 +182,7 @@ router.post('/addresses/:id/default', authenticate, async (req, res) => {
 });
 
 // Notifications
+// Get notification preferences and unread count for the authenticated user.
 router.get('/notifications', authenticate, async (req, res) => {
   try {
     const preferences = req.user.notificationPreferences || {
@@ -203,6 +213,7 @@ router.get('/notifications', authenticate, async (req, res) => {
   }
 });
 
+// Update notification preferences for the authenticated user.
 router.put('/notifications', authenticate, [
   body('emailOrderUpdates').optional().isBoolean(),
   body('emailPromotions').optional().isBoolean(),
@@ -237,6 +248,7 @@ router.put('/notifications', authenticate, [
 });
 
 // Sessions
+// List all active sessions for the authenticated user.
 router.get('/sessions', authenticate, async (req, res) => {
   try {
     const sessions = await Session.find({ userId: req.user._id, isActive: true })
@@ -247,6 +259,7 @@ router.get('/sessions', authenticate, async (req, res) => {
   }
 });
 
+// Revoke a specific session by ID. Ensures the session belongs to the authenticated user.
 router.delete('/sessions/:id', authenticate, async (req, res) => {
   try {
     const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });

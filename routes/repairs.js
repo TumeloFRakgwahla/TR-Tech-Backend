@@ -9,6 +9,7 @@ const { authenticateAdmin, authenticate } = require('../middleware/auth');
 const { toSafeString } = require('../utils/query');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
 
+// Validation rules for creating a repair request.
 const repairValidation = [
   body('customer.name').trim().notEmpty().withMessage('Customer name is required'),
   body('customer.email').optional().isEmail().withMessage('Valid email is required').normalizeEmail(),
@@ -23,11 +24,14 @@ const repairValidation = [
 
 const repairLimiter = createPublicLimiter();
 
+// Validation rules for updating a repair (admin-only).
 const repairUpdateValidation = [
   body('status').optional().isIn(['Pending', 'In Progress', 'Completed', 'Cancelled']).withMessage('Invalid status'),
   body('estimatedCost').optional().isFloat({ min: 0 }).withMessage('Estimated cost must be a positive number')
 ];
 
+// Submit a new repair request. Rate limited to prevent spam.
+// Status is always set to 'Pending' server-side; client input is ignored.
 router.post('/', repairLimiter, repairValidation, validate, async (req, res) => {
   try {
     const { customer, device, issue, additionalInfo, image } = req.body;
@@ -46,6 +50,7 @@ router.post('/', repairLimiter, repairValidation, validate, async (req, res) => 
   }
 });
 
+// Get the authenticated user's own repair requests with pagination.
 router.get('/my-repairs', authenticate, async (req, res) => {
   try {
     const pageNum = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -63,6 +68,7 @@ router.get('/my-repairs', authenticate, async (req, res) => {
   }
 });
 
+// List all repair requests. Admin-only with optional status filter.
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
     const status = toSafeString(req.query.status);
@@ -85,6 +91,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get a single repair request by ID. Admin-only.
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
     const repair = await Repair.findById(req.params.id);
@@ -97,6 +104,7 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Update repair status or estimated cost. Admin-only.
 router.put('/:id', authenticateAdmin, repairUpdateValidation, validate, async (req, res) => {
   try {
     const { status, notes, estimatedCost } = req.body;
@@ -121,6 +129,7 @@ router.put('/:id', authenticateAdmin, repairUpdateValidation, validate, async (r
   }
 });
 
+// Delete a repair request by ID. Admin-only.
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const repair = await Repair.findByIdAndDelete(req.params.id);

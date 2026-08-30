@@ -1,6 +1,8 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 
+// Rolls back stock reservations for a list of product/quantity pairs.
+// Used when order creation fails partway through to prevent stock from being permanently deducted.
 const rollbackStock = async (reserved) => {
   for (const r of reserved) {
     try {
@@ -11,6 +13,11 @@ const rollbackStock = async (reserved) => {
   }
 };
 
+// Creates an order with atomic stock deduction.
+// Each item's stock is decremented using findOneAndUpdate with a $gte condition
+// to ensure we never sell more than is available. If any item is out of stock,
+// all previous deductions are rolled back and the order is not created.
+// Also clears the user's cart after a successful order.
 const createOrder = async (orderData) => {
   const reservedStock = [];
   const validatedItems = [];
@@ -68,6 +75,8 @@ const createOrder = async (orderData) => {
   return order;
 };
 
+// Retrieves a paginated list of orders matching the query.
+// Populates the product reference inside each order item for display.
 const getOrders = async (query = {}, page = 1, limit = 20) => {
   const skip = (Math.max(1, parseInt(page, 10) || 1) - 1) * limit;
   const [orders, total] = await Promise.all([
@@ -77,14 +86,17 @@ const getOrders = async (query = {}, page = 1, limit = 20) => {
   return { orders, total };
 };
 
+// Finds a single order by ID with populated product references.
 const getOrderById = async (id) => {
   return Order.findById(id).populate('items.product');
 };
 
+// Updates an order by ID. Returns the updated document with populated references.
 const updateOrder = async (id, updateData) => {
   return Order.findByIdAndUpdate(id, updateData, { new: true }).populate('items.product');
 };
 
+// Permanently deletes an order by ID.
 const deleteOrder = async (id) => {
   return Order.findByIdAndDelete(id);
 };
