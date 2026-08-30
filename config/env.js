@@ -17,9 +17,16 @@ const parseEnv = () => {
   } catch (error) {
     console.error('Invalid environment variables:');
     if (error instanceof z.ZodError) {
-      error.errors.forEach((err) => {
-        console.error(`  ${err.path.join('.')}: ${err.message}`);
-      });
+      const issues = error.issues ?? error.errors ?? [];
+      if (issues.length) {
+        issues.forEach((err) => {
+          console.error(`  ${err.path?.join('.')}: ${err.message}`);
+        });
+      } else {
+        console.error('  Unknown Zod validation failure (no issues reported).');
+      }
+    } else {
+      console.error('  Unexpected validation error:', error.message || error);
     }
     process.exit(1);
   }
