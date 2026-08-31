@@ -102,6 +102,7 @@ app.get('/api/csrf-token', (req, res) => {
 app.get('/', (req, res) => {
   res.json({ status: 'OK', message: 'TR-Tech Backend is running' });
 });
+
 registerRoutes(app);
 
 app.get('/api/v1/health', (req, res) => {
