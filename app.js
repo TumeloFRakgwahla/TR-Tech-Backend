@@ -132,7 +132,7 @@ app.use((err, req, res, next) => {
 });
 
 if (process.env.NODE_ENV === 'production') {
-  const frontendDist = path.join(__dirname, '..', 'tr-tech-frontend', 'dist');
+  const frontendDist = path.join(__dirname, 'frontend-build');
   app.use(express.static(frontendDist));
   app.get('*', (req, res) => {
     res.sendFile(path.join(frontendDist, 'index.html'));
