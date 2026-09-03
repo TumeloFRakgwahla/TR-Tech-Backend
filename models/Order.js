@@ -81,7 +81,13 @@ const orderSchema = new mongoose.Schema({
     enum: ['Pending', 'Paid', 'Refunded'],
     default: 'Pending'
   },
-  notes: String
+  notes: String,
+  paystackReference: {
+    type: String,
+    index: true,
+    unique: true,
+    sparse: true,
+  }
 }, {
   timestamps: true,
   indexes: [

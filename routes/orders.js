@@ -176,6 +176,35 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Public order tracking by order ID or customer phone number.
+// No authentication required so WhatsApp customers can track their orders.
+router.get('/track', async (req, res) => {
+  try {
+    const { orderId, phone } = req.query;
+
+    if (!orderId && !phone) {
+      return res.status(400).json({ success: false, message: 'Please provide an order ID or phone number' });
+    }
+
+    let query = {};
+    if (orderId) {
+      query._id = orderId;
+    }
+    if (phone) {
+      query['customer.phone'] = phone;
+    }
+
+    const order = await Order.findOne(query).populate('items.product');
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    res.json({ success: true, data: order });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
 // Create a new order. Public endpoint (optional auth for user tracking).
 // Stock is deducted atomically in orderService.createOrder.
 router.post('/', optionalAuthenticate, orderItemValidation, validate, async (req, res) => {

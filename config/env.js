@@ -8,6 +8,8 @@ const envSchema = z.object({
   MONGODB_URI: z.string().url('MONGODB_URI must be a valid URL'),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   FRONTEND_URL: z.string().url('FRONTEND_URL must be a valid URL').default('http://localhost:5173'),
+  PAYSTACK_SECRET_KEY: z.string().min(10, 'PAYSTACK_SECRET_KEY is required').default(''),
+  PAYSTACK_PUBLIC_KEY: z.string().min(10, 'PAYSTACK_PUBLIC_KEY is required').default(''),
 });
 
 // Parse and validate environment variables. Called at application startup.
