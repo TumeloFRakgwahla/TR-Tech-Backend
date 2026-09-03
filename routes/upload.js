@@ -23,15 +23,17 @@ const upload = multer({
   }
 });
 
+const isVercel = process.env.VERCEL === '1';
+
 // Whether Vercel Blob is configured is decided lazily so tests can flip
 // BLOB_READ_WRITE_TOKEN between cases without reloading this module.
 function isBlobEnabled() {
   return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
 }
 
-// Local-disk fallback (development only). Persisted files are served by app.js's
-// /uploads static handler, proxied through the frontend on Vercel.
-const uploadsDir = path.join(__dirname, '../uploads');
+// Local-disk fallback (development only). On Vercel, the filesystem is
+// read-only except /tmp, so we only use local disk when not on Vercel.
+const uploadsDir = isVercel ? '/tmp' : path.join(__dirname, '../uploads');
 
 function buildFilename(originalname) {
   const ext = path.extname(originalname) || '';
@@ -48,16 +50,33 @@ router.post('/image', authenticateAdmin, upload.single('image'), async (req, res
     const filename = buildFilename(req.file.originalname);
 
     if (isBlobEnabled()) {
-      const blob = await put(filename, req.file.buffer, {
-        access: 'public',
-        contentType: req.file.mimetype,
-        addRandomSuffix: false,
-      });
-      return res.json({
-        success: true,
-        message: 'Image uploaded successfully',
-        url: blob.url,
-        filename: path.basename(new URL(blob.url).pathname),
+      try {
+        const blob = await put(filename, req.file.buffer, {
+          access: 'public',
+          contentType: req.file.mimetype,
+          addRandomSuffix: false,
+        });
+        return res.json({
+          success: true,
+          message: 'Image uploaded successfully',
+          url: blob.url,
+          filename: path.basename(new URL(blob.url).pathname),
+        });
+      } catch (blobError) {
+        console.error('Vercel Blob upload error:', blobError);
+        return res.status(500).json({
+          success: false,
+          message: isVercel
+            ? 'Image upload failed. Please ensure BLOB_READ_WRITE_TOKEN is configured in Vercel environment variables.'
+            : 'Image upload failed',
+        });
+      }
+    }
+
+    if (isVercel) {
+      return res.status(500).json({
+        success: false,
+        message: 'Image upload failed. Vercel Blob is not configured. Please set BLOB_READ_WRITE_TOKEN in Vercel environment variables.',
       });
     }
 
@@ -73,6 +92,7 @@ router.post('/image', authenticateAdmin, upload.single('image'), async (req, res
       filename,
     });
   } catch (error) {
+    console.error('Upload error:', error);
     serverError(res, error);
   }
 });
@@ -82,6 +102,13 @@ router.post('/images', authenticateAdmin, upload.array('images', 10), async (req
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: 'No files uploaded' });
+    }
+
+    if (isBlobEnabled() === false && isVercel) {
+      return res.status(500).json({
+        success: false,
+        message: 'Image upload failed. Vercel Blob is not configured. Please set BLOB_READ_WRITE_TOKEN in Vercel environment variables.',
+      });
     }
 
     if (isBlobEnabled() === false) {
@@ -94,15 +121,25 @@ router.post('/images', authenticateAdmin, upload.array('images', 10), async (req
     for (const file of req.files) {
       const filename = buildFilename(file.originalname);
       if (isBlobEnabled()) {
-        const blob = await put(filename, file.buffer, {
-          access: 'public',
-          contentType: file.mimetype,
-          addRandomSuffix: false,
-        });
-        data.push({
-          url: blob.url,
-          filename: path.basename(new URL(blob.url).pathname),
-        });
+        try {
+          const blob = await put(filename, file.buffer, {
+            access: 'public',
+            contentType: file.mimetype,
+            addRandomSuffix: false,
+          });
+          data.push({
+            url: blob.url,
+            filename: path.basename(new URL(blob.url).pathname),
+          });
+        } catch (blobError) {
+          console.error('Vercel Blob upload error:', blobError);
+          return res.status(500).json({
+            success: false,
+            message: isVercel
+              ? 'Image upload failed. Please ensure BLOB_READ_WRITE_TOKEN is configured in Vercel environment variables.'
+              : 'Image upload failed',
+          });
+        }
       } else {
         const localPath = path.join(uploadsDir, filename);
         fs.writeFileSync(localPath, file.buffer);
@@ -112,6 +149,7 @@ router.post('/images', authenticateAdmin, upload.array('images', 10), async (req
 
     res.status(201).json({ success: true, message: 'Images uploaded successfully', data });
   } catch (error) {
+    console.error('Upload error:', error);
     serverError(res, error);
   }
 });
