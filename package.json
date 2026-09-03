@@ -20,6 +20,7 @@
   "author": "TR-Tech",
   "license": "MIT",
   "dependencies": {
+    "@vercel/blob": "^0.27.3",
     "axios": "^1.20.0",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
