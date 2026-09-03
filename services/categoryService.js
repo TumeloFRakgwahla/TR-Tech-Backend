@@ -4,7 +4,7 @@ const Category = require('../models/Category');
 const getCategories = async (query = {}, page = 1, limit = 50) => {
   const skip = (Math.max(1, parseInt(page, 10) || 1) - 1) * limit;
   const [items, total] = await Promise.all([
-    Category.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Category.find(query).sort({ displayOrder: 1, createdAt: -1 }).skip(skip).limit(limit),
     Category.countDocuments(query),
   ]);
   return { items, total };
@@ -31,6 +31,11 @@ const deleteCategory = async (id) => {
   return Category.findByIdAndDelete(id);
 };
 
+// Returns active categories sorted by displayOrder for the frontend CategoryChips component.
+const getActiveCategories = async () => {
+  return Category.find({ status: 'Active' }).sort({ displayOrder: 1, createdAt: -1 });
+};
+
 // Returns an array of category names, optionally filtered by status.
 // Used for dropdown filters in the shop and admin panels.
 const getCategoryNames = async (status = 'Active') => {
@@ -45,5 +50,6 @@ module.exports = {
   createCategory,
   updateCategory,
   deleteCategory,
+  getActiveCategories,
   getCategoryNames,
 };

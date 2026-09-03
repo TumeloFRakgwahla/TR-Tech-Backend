@@ -15,6 +15,17 @@ const categorySchema = new mongoose.Schema({
     trim: true,
     lowercase: true
   },
+  icon: {
+    type: String,
+    default: 'MoreHorizontal',
+    trim: true,
+    maxlength: [50, 'Icon name cannot exceed 50 characters']
+  },
+  displayOrder: {
+    type: Number,
+    default: 0,
+    index: true
+  },
   status: {
     type: String,
     enum: ['Active', 'Inactive'],
@@ -25,7 +36,8 @@ const categorySchema = new mongoose.Schema({
   indexes: [
     { key: { name: 1 } },
     { key: { slug: 1 } },
-    { key: { status: 1 } }
+    { key: { status: 1 } },
+    { key: { displayOrder: 1 } }
   ]
 });
 

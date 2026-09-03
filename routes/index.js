@@ -9,8 +9,10 @@ const contactRoutes = require('./contact');
 const marketingRoutes = require('./marketing');
 const ordersRoutes = require('./orders');
 const paymentMethodsRoutes = require('./paymentMethods');
+const paymentsRoutes = require('./payments');
 const productsRoutes = require('./products');
 const repairsRoutes = require('./repairs');
+const seoRoutes = require('./seo');
 const servicesRoutes = require('./services');
 const uploadRoutes = require('./upload');
 const usersRoutes = require('./users');
@@ -26,8 +28,10 @@ const routeRegistry = [
   { path: '/api/v1/marketing', routes: marketingRoutes },
   { path: '/api/v1/orders', routes: ordersRoutes },
   { path: '/api/v1/payment-methods', routes: paymentMethodsRoutes },
+  { path: '/api/v1/payments', routes: paymentsRoutes },
   { path: '/api/v1/products', routes: productsRoutes },
   { path: '/api/v1/repairs', routes: repairsRoutes },
+  { path: '/', routes: seoRoutes },
   { path: '/api/v1/services', routes: servicesRoutes },
   { path: '/api/v1/upload', routes: uploadRoutes },
   { path: '/api/v1/users', routes: usersRoutes },

@@ -6,25 +6,28 @@ const { authenticateAdmin } = require('../middleware/auth');
 const { serverError, badRequest } = require('../utils/response');
 const { sendPaginated } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/query');
-const Category = require('../models/Category');
 const {
   getCategories,
   getCategoryById,
   createCategory,
   updateCategory,
   deleteCategory,
+  getActiveCategories,
 } = require('../services/categoryService');
 
 const categoryValidation = [
   body('name').trim().notEmpty().withMessage('Category name is required').isLength({ max: 100 }),
   body('slug').optional().trim().isLength({ max: 100 }),
+  body('icon').optional().trim().isLength({ max: 50 }),
+  body('displayOrder').optional().isInt({ min: 0, max: 999 }).withMessage('Display order must be between 0 and 999'),
   body('status').optional().trim().isIn(['Active', 'Inactive']),
 ];
 
-// Get all active categories for public display (e.g., shop filter dropdown).
+// Get all active categories for public display (e.g., CategoryChips component).
+// Sorted by displayOrder ascending.
 router.get('/active', async (req, res) => {
   try {
-    const categories = await Category.find({ status: 'Active' }).sort({ name: 1 });
+    const categories = await getActiveCategories();
     res.json({ success: true, data: categories });
   } catch (error) {
     serverError(res, error);
@@ -71,8 +74,14 @@ router.get('/:id', async (req, res) => {
 // Create a new category. Admin-only.
 router.post('/', categoryValidation, validate, async (req, res) => {
   try {
-    const { name, slug, status } = req.body;
-    const category = await createCategory({ name, slug, status: status || 'Active' });
+    const { name, slug, icon, displayOrder, status } = req.body;
+    const category = await createCategory({
+      name,
+      slug,
+      icon: icon || 'MoreHorizontal',
+      displayOrder: displayOrder ?? 0,
+      status: status || 'Active',
+    });
     res.status(201).json({ success: true, data: category });
   } catch (error) {
     if (error.code === 11000) {
@@ -86,6 +95,8 @@ router.post('/', categoryValidation, validate, async (req, res) => {
 router.put('/:id', [
   body('name').optional().trim().notEmpty().withMessage('Category name cannot be empty').isLength({ max: 100 }),
   body('slug').optional().trim().isLength({ max: 100 }),
+  body('icon').optional().trim().isLength({ max: 50 }),
+  body('displayOrder').optional().isInt({ min: 0, max: 999 }).withMessage('Display order must be between 0 and 999'),
   body('status').optional().trim().isIn(['Active', 'Inactive']),
 ], validate, async (req, res) => {
   try {
