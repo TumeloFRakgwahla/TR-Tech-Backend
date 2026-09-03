@@ -12,6 +12,16 @@ const router = express.Router();
 
 const authLimiter = createAuthLimiter();
 
+// Treat Vercel deployments as production so cookies use Secure + SameSite=None
+// (required for cross-site XHR from the separate frontend Vercel domain).
+const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
+const cookieBaseOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? 'none' : 'lax',
+  path: '/',
+};
+
 // Register a new customer account.
 // Rate limited to prevent abuse. Generates an email verification token.
 router.post('/register', authLimiter, [
@@ -51,11 +61,8 @@ router.post('/register', authLimiter, [
     const token = await issueSession(user, req);
 
     res.cookie('authToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      ...cookieBaseOptions,
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: '/',
     });
 
     res.status(201).json({
@@ -132,11 +139,8 @@ router.post('/login', authLimiter, [
     const token = await issueSession(user, req);
 
     res.cookie('authToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      ...cookieBaseOptions,
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: '/',
     });
 
     res.json({
@@ -187,18 +191,8 @@ router.post('/logout', async (req, res) => {
   } catch (error) {
     console.error('Logout session revocation error:', error);
   } finally {
-    res.clearCookie('authToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      path: '/',
-    });
-    res.clearCookie('csrf_token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      path: '/',
-    });
+    res.clearCookie('authToken', cookieBaseOptions);
+    res.clearCookie('csrf_token', cookieBaseOptions);
     res.json({ success: true, message: 'Logged out successfully' });
   }
 });
@@ -345,11 +339,8 @@ router.post('/admin/login', authLimiter, [
     const token = await issueSession(user, req);
 
     res.cookie('adminAuthToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+      ...cookieBaseOptions,
       maxAge: 30 * 24 * 60 * 60 * 1000,
-      path: '/',
     });
 
     res.json({
@@ -400,18 +391,8 @@ router.post('/admin/logout', async (req, res) => {
   } catch (error) {
     console.error('Admin logout session revocation error:', error);
   } finally {
-    res.clearCookie('adminAuthToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      path: '/',
-    });
-    res.clearCookie('csrf_token', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
-      path: '/',
-    });
+    res.clearCookie('adminAuthToken', cookieBaseOptions);
+    res.clearCookie('csrf_token', cookieBaseOptions);
     res.json({ success: true, message: 'Logged out successfully' });
   }
 });
