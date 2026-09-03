@@ -3,31 +3,14 @@ const router = express.Router();
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const { put, del } = require('@vercel/blob');
 const { authenticateAdmin } = require('../middleware/auth');
 const { serverError } = require('../utils/response');
 
-const uploadsDir = path.join(__dirname, '../uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Multer storage configuration: saves files to the uploads directory with a unique timestamp-based name.
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, uploadsDir);
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, uniqueSuffix + ext);
-  }
-});
-
-// Multer upload configuration:
-// - Limits file size to 5MB
-// - Accepts only image files (jpeg, jpg, png, gif, webp) via MIME type and extension check
+// Multer uses memory storage so the file Buffer is available for the @vercel/blob
+// SDK (or for a local-disk fallback when BLOB_READ_WRITE_TOKEN is not configured).
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: function (req, file, cb) {
     const filetypes = /jpeg|jpg|png|gif|webp/;
@@ -40,19 +23,54 @@ const upload = multer({
   }
 });
 
+// Whether Vercel Blob is configured is decided lazily so tests can flip
+// BLOB_READ_WRITE_TOKEN between cases without reloading this module.
+function isBlobEnabled() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+}
+
+// Local-disk fallback (development only). Persisted files are served by app.js's
+// /uploads static handler, proxied through the frontend on Vercel.
+const uploadsDir = path.join(__dirname, '../uploads');
+
+function buildFilename(originalname) {
+  const ext = path.extname(originalname) || '';
+  return `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+}
+
 // Upload a single image. Admin-only.
-router.post('/image', authenticateAdmin, upload.single('image'), (req, res) => {
+router.post('/image', authenticateAdmin, upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const imageUrl = `/uploads/${req.file.filename}`;
-    res.json({
+    const filename = buildFilename(req.file.originalname);
+
+    if (isBlobEnabled()) {
+      const blob = await put(filename, req.file.buffer, {
+        access: 'public',
+        contentType: req.file.mimetype,
+        addRandomSuffix: false,
+      });
+      return res.json({
+        success: true,
+        message: 'Image uploaded successfully',
+        url: blob.url,
+        filename: path.basename(new URL(blob.url).pathname),
+      });
+    }
+
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    const localPath = path.join(uploadsDir, filename);
+    fs.writeFileSync(localPath, req.file.buffer);
+    return res.json({
       success: true,
       message: 'Image uploaded successfully',
-      url: imageUrl,
-      filename: req.file.filename
+      url: `/uploads/${filename}`,
+      filename,
     });
   } catch (error) {
     serverError(res, error);
@@ -60,43 +78,83 @@ router.post('/image', authenticateAdmin, upload.single('image'), (req, res) => {
 });
 
 // Upload up to 10 images at once. Admin-only.
-router.post('/images', authenticateAdmin, upload.array('images', 10), (req, res) => {
+router.post('/images', authenticateAdmin, upload.array('images', 10), async (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ success: false, message: 'No files uploaded' });
     }
 
-    const data = req.files.map((file) => ({
-      url: `/uploads/${file.filename}`,
-      filename: file.filename,
-    }));
+    if (isBlobEnabled() === false) {
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+    }
+
+    const data = [];
+    for (const file of req.files) {
+      const filename = buildFilename(file.originalname);
+      if (isBlobEnabled()) {
+        const blob = await put(filename, file.buffer, {
+          access: 'public',
+          contentType: file.mimetype,
+          addRandomSuffix: false,
+        });
+        data.push({
+          url: blob.url,
+          filename: path.basename(new URL(blob.url).pathname),
+        });
+      } else {
+        const localPath = path.join(uploadsDir, filename);
+        fs.writeFileSync(localPath, file.buffer);
+        data.push({ url: `/uploads/${filename}`, filename });
+      }
+    }
+
     res.status(201).json({ success: true, message: 'Images uploaded successfully', data });
   } catch (error) {
     serverError(res, error);
   }
 });
 
-// Delete an uploaded image by filename. Admin-only.
-// Validates the filename to prevent path traversal attacks.
-router.delete('/image/:filename', authenticateAdmin, (req, res) => {
+// Delete an uploaded image. Admin-only.
+// Accepts either a stored filename (legacy / local-disk) or a full Vercel Blob URL.
+router.delete('/image/:filename', authenticateAdmin, async (req, res) => {
   try {
-    const filename = req.params.filename;
-    if (typeof filename !== 'string' || !/^[\w.-]+$/.test(filename) || filename === '.' || filename === '..') {
+    const raw = req.params.filename;
+    if (typeof raw !== 'string' || !/^[\w.\-/:%?&=#]+$/.test(raw) || raw === '.' || raw === '..') {
       return res.status(400).json({ success: false, message: 'Invalid filename' });
     }
 
-    const resolved = path.resolve(uploadsDir, filename);
+    const isUrl = /^https?:\/\//i.test(raw);
+
+    if (isBlobEnabled()) {
+      if (!isUrl) {
+        return res.status(400).json({
+          success: false,
+          message: 'Blob storage is enabled; pass the full image URL to delete',
+        });
+      }
+      await del(raw);
+      return res.json({ success: true, message: 'Image deleted successfully' });
+    }
+
+    if (isUrl) {
+      return res.status(400).json({
+        success: false,
+        message: 'Local storage is enabled; pass only the filename to delete',
+      });
+    }
+
+    const resolved = path.resolve(uploadsDir, raw);
     const uploadsRoot = path.join(uploadsDir, path.sep);
-    if (resolved !== path.join(uploadsDir, filename) || !resolved.startsWith(uploadsRoot)) {
+    if (!resolved.startsWith(uploadsRoot)) {
       return res.status(400).json({ success: false, message: 'Invalid filename' });
     }
-
     if (fs.existsSync(resolved)) {
       fs.unlinkSync(resolved);
-      res.json({ success: true, message: 'Image deleted successfully' });
-    } else {
-      res.status(404).json({ success: false, message: 'Image not found' });
+      return res.json({ success: true, message: 'Image deleted successfully' });
     }
+    return res.status(404).json({ success: false, message: 'Image not found' });
   } catch (error) {
     serverError(res, error);
   }

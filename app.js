@@ -71,19 +71,24 @@ app.use(express.urlencoded({ extended: false, limit: '100kb' }));
 app.use(cookieParser());
 app.use(sanitize);
 
-// Serve uploaded files with explicit CORS/CORP headers so the frontend can load them
-// even when the backend is on a different origin.
-app.use('/uploads', (req, res, next) => {
-  res.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'https://tr-tech-frontend.vercel.app');
-  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-}, express.static(path.join(__dirname, 'uploads')));
+// Local-disk fallback for dev: when BLOB_READ_WRITE_TOKEN is not set, uploaded files
+// land in ./uploads and are served here. In production, Vercel Blob stores images at
+// absolute URLs (returned from the upload route) and no /uploads static handler is
+// needed because the frontend rewrites /uploads/* to the backend for legacy products
+// that may still reference local paths.
+if (!process.env.BLOB_READ_WRITE_TOKEN) {
+  app.use('/uploads', (req, res, next) => {
+    res.header('Access-Control-Allow-Origin', process.env.FRONTEND_URL || 'https://tr-tech-frontend.vercel.app');
+    res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  }, express.static(path.join(__dirname, 'uploads')));
+}
 
 // CSRF endpoint: generates a random token, stores it in an HTTP-only cookie, and returns it
 // to the client. The client must send this token back in the X-CSRF-Token header for
