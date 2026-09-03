@@ -22,6 +22,10 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const isDev = process.env.NODE_ENV === 'development';
+// Treat Vercel deployments as production even if NODE_ENV was not set explicitly,
+// so cookies use Secure + SameSite=None (required for cross-site XHR from the
+// separate frontend Vercel domain).
+const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
 const frontendUrl = process.env.FRONTEND_URL || 'https://tr-tech-frontend.vercel.app';
 
 const corsOptions = {
@@ -93,8 +97,9 @@ app.get('/api/csrf-token', (req, res) => {
   const token = crypto.randomBytes(32).toString('hex');
   res.cookie('csrf_token', token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+    secure: isProd,
+    sameSite: isProd ? 'none' : 'lax',
+    path: '/',
   });
   res.json({ csrfToken: token });
 });

@@ -13,6 +13,12 @@ const app = require('./app');
 
 const PORT = process.env.PORT || 5000;
 
+// Surface a loud, actionable warning if Vercel Blob is not configured on
+// production deployments. Without it, admin image uploads fail with a 500.
+if ((process.env.NODE_ENV === 'production' || process.env.VERCEL === '1') && !process.env.BLOB_READ_WRITE_TOKEN) {
+  console.warn('[startup] BLOB_READ_WRITE_TOKEN is not set. Image uploads will fail in production until it is configured in Vercel environment variables.');
+}
+
 if (process.env.VERCEL !== '1') {
   // Local development: connect to DB then start listening.
   connectDB().then(() => {
