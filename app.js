@@ -140,8 +140,46 @@ app.use((err, req, res, next) => {
 if (process.env.NODE_ENV === 'production') {
   const frontendDist = path.join(__dirname, 'frontend-build');
   app.use(express.static(frontendDist));
+
+  // Static public routes that exist in the frontend SPA.
+  // Dynamic routes (product detail, account, admin) are matched by prefix below.
+  const STATIC_ROUTES = new Set([
+    '/about',
+    '/services',
+    '/shop',
+    '/book-repair',
+    '/cart',
+    '/checkout',
+    '/contact',
+    '/wishlist',
+    '/track-order',
+    '/order-confirmation',
+  ]);
+
+  // Prefix-based matching for dynamic routes with path params.
+  const DYNAMIC_ROUTE_PREFIXES = [
+    '/products/',
+    '/account/',
+    '/admin/',
+  ];
+
+  const isKnownRoute = (reqPath) => {
+    if (reqPath === '/') return true;
+    if (STATIC_ROUTES.has(reqPath)) return true;
+    if (DYNAMIC_ROUTE_PREFIXES.some((p) => reqPath.startsWith(p))) return true;
+    if (reqPath === '/admin' || reqPath === '/account') return true;
+    return false;
+  };
+
+  // Catch-all for client-side routing. Known routes serve index.html with 200
+  // so the SPA renders normally. Unknown paths serve index.html with 404 so
+  // React Router renders NotFoundPage but the HTTP status is correct for SEO
+  // (prevents soft-404).
   app.get('*', (req, res) => {
-    res.sendFile(path.join(frontendDist, 'index.html'));
+    if (isKnownRoute(req.path)) {
+      return res.sendFile(path.join(frontendDist, 'index.html'));
+    }
+    res.status(404).sendFile(path.join(frontendDist, 'index.html'));
   });
 }
 

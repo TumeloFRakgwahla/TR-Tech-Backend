@@ -1,24 +1,26 @@
 const axios = require('axios');
+const crypto = require('crypto');
 
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
+const getSecretKey = () => {
+  const key = process.env.PAYSTACK_SECRET_KEY;
+  if (!key || key.length < 10) {
+    throw new Error('PAYSTACK_SECRET_KEY environment variable is not configured');
+  }
+  return key;
+};
+
 const getPaystackClient = () => {
-  if (!PAYSTACK_SECRET_KEY) {
-    throw new Error('PAYSTACK_SECRET_KEY environment variable is required');
-  }
-
-  if (!getPaystackClient._instance) {
-    getPaystackClient._instance = axios.create({
-      baseURL: PAYSTACK_BASE_URL,
-      headers: {
-        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
-    });
-  }
-
-  return getPaystackClient._instance;
+  const client = axios.create({
+    baseURL: PAYSTACK_BASE_URL,
+    headers: {
+      Authorization: `Bearer ${getSecretKey()}`,
+      'Content-Type': 'application/json',
+    },
+    timeout: 10000,
+  });
+  return client;
 };
 
 const initializeTransaction = async ({ email, amount, reference, callbackUrl, metadata = {} }) => {
@@ -57,7 +59,36 @@ const verifyTransaction = async (reference) => {
   return response.data.data;
 };
 
+const verifyWebhookSignature = (signature, payload) => {
+  const secret = getSecretKey();
+  if (!signature) return false;
+
+  let payloadString;
+  if (typeof payload === 'string') {
+    payloadString = payload;
+  } else if (Buffer.isBuffer(payload)) {
+    payloadString = payload.toString();
+  } else {
+    payloadString = JSON.stringify(payload);
+  }
+
+  const expectedSignature = crypto
+    .createHmac('sha512', secret)
+    .update(payloadString)
+    .digest('hex');
+
+  try {
+    return crypto.timingSafeEqual(
+      Buffer.from(signature),
+      Buffer.from(expectedSignature)
+    );
+  } catch {
+    return false;
+  }
+};
+
 module.exports = {
   initializeTransaction,
   verifyTransaction,
+  verifyWebhookSignature,
 };

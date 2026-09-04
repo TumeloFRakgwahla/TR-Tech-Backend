@@ -40,12 +40,22 @@ const routeRegistry = [
 
 // registerRoutes mounts all route modules under /api/v1 with CSRF protection.
 // CSRF is skipped in test mode to avoid setup complexity.
+// The Paystack webhook path is exempt from CSRF because it receives raw
+// POST payloads from Paystack's servers with HMAC-SHA512 signature validation
+// instead. The raw body parser is registered in app.js for this path.
 const registerRoutes = (app) => {
   const isTest = process.env.NODE_ENV === 'test';
   const csrfMiddleware = isTest ? (req, res, next) => next() : csrfProtection;
 
   routeRegistry.forEach(({ path, routes }) => {
-    app.use(path, csrfMiddleware, routes);
+    if (path === '/api/v1/payments') {
+      app.use(path, (req, res, next) => {
+        if (req.path === '/paystack/webhook') return next();
+        return csrfMiddleware(req, res, next);
+      }, routes);
+    } else {
+      app.use(path, csrfMiddleware, routes);
+    }
   });
 };
 

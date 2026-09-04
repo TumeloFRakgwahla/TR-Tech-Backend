@@ -5,6 +5,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Order = require('../models/Order');
+const Product = require('../models/Product');
 const { toSafeString } = require('../utils/query');
 const { authenticateAdmin, optionalAuthenticate } = require('../middleware/auth');
 const {
@@ -163,21 +164,9 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Get a single order by ID. Admin-only.
-router.get('/:id', authenticateAdmin, async (req, res) => {
-  try {
-    const order = await getOrderById(req.params.id);
-    if (!order) {
-      return res.status(404).json({ success: false, message: 'Order not found' });
-    }
-    res.json({ success: true, data: order });
-  } catch (error) {
-    serverError(res, error);
-  }
-});
-
 // Public order tracking by order ID or customer phone number.
 // No authentication required so WhatsApp customers can track their orders.
+// Must be defined before /:id to avoid Express matching 'track' as a route parameter.
 router.get('/track', async (req, res) => {
   try {
     const { orderId, phone } = req.query;
@@ -199,6 +188,22 @@ router.get('/track', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
+    res.json({ success: true, data: order });
+  } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid order ID format' });
+    }
+    serverError(res, error);
+  }
+});
+
+// Get a single order by ID. Admin-only.
+router.get('/:id', authenticateAdmin, async (req, res) => {
+  try {
+    const order = await getOrderById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
     res.json({ success: true, data: order });
   } catch (error) {
     serverError(res, error);
@@ -239,7 +244,10 @@ router.put('/:id', authenticateAdmin, orderUpdateValidation, validate, async (re
 
     res.json({ success: true, data: order });
   } catch (error) {
-    badRequest(res, error);
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid order ID format' });
+    }
+    serverError(res, error);
   }
 });
 
