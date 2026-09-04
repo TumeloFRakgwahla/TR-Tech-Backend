@@ -28,7 +28,7 @@ const sanitizeValue = (value) => {
 
 // Express middleware that sanitizes req.body in place before validation runs.
 const sanitize = (req, res, next) => {
-  if (req.body && typeof req.body === 'object') {
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) {
     req.body = sanitizeValue(req.body);
   }
   next();

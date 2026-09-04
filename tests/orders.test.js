@@ -230,4 +230,42 @@ describe('Orders', () => {
       expect(res.body.success).toBe(true);
     });
   });
+
+  describe('GET /api/v1/orders/track', () => {
+    it('should track order by ID', async () => {
+      const order = await Order.create({
+        items: [{ product: productId, name: 'Test', condition: 'New', price: 999, quantity: 1 }],
+        customer: { name: 'Jane Doe', email: 'jane@test.com', phone: '1234567890' },
+        totalAmount: 999,
+        status: 'Pending',
+        paymentStatus: 'Pending',
+      });
+
+      const res = await request(app)
+        .get('/api/v1/orders/track')
+        .query({ orderId: order._id.toString() });
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data._id).toBe(order._id.toString());
+    });
+
+    it('should return 400 for invalid order ID format', async () => {
+      const res = await request(app)
+        .get('/api/v1/orders/track')
+        .query({ orderId: 'invalid-id' });
+
+      expect(res.statusCode).toEqual(400);
+      expect(res.body.success).toBe(false);
+      expect(res.body.message).toBe('Invalid order ID format');
+    });
+
+    it('should return 404 for non-existent order', async () => {
+      const res = await request(app)
+        .get('/api/v1/orders/track')
+        .query({ orderId: '507f1f77bcf86cd799439011' });
+
+      expect(res.statusCode).toEqual(404);
+    });
+  });
 });
