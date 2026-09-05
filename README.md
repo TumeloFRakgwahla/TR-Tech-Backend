@@ -122,7 +122,6 @@ tr-tech-backend/
 │   ├── cart.js          # Cart operations
 │   ├── wishlist.js      # Wishlist operations
 │   ├── contact.js       # Contact form and management
-│   ├── users.js         # User admin management
 │   ├── paymentMethods.js # Payment methods CRUD
 │   ├── marketing.js     # Campaigns, coupons, promotions
 │   ├── upload.js        # File upload endpoint
@@ -144,14 +143,13 @@ tr-tech-backend/
 │   ├── auth.test.js     # Auth route tests
 │   ├── products.test.js # Product route tests
 │   ├── orders.test.js   # Order route tests
-│   ├── repairs.test.js  # Repair route tests
-│   ├── contact.test.js  # Contact route tests
 │   ├── brands.test.js   # Brand route tests
 │   ├── categories.test.js # Category route tests
 │   ├── marketing.test.js # Marketing route tests
 │   ├── security.test.js # Security header tests
 │   ├── xss.test.js      # XSS sanitization tests
 │   ├── accountFeatures.test.js # Account feature tests
+│   ├── payments.test.js # Payment route tests
 │   └── helpers/         # Test helper utilities
 ├── uploads/             # Uploaded file storage
 ├── app.js               # Express app setup, middleware, error handling
@@ -231,6 +229,12 @@ All routes are prefixed with `/api/v1`.
 | POST | `/api/v1/auth/verify-email` | Verify email | Public |
 | POST | `/api/v1/auth/resend-verification` | Resend verification email | Public |
 | GET | `/api/v1/auth/admin/me` | Get current admin | Admin |
+
+### CSRF
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| GET | `/api/csrf-token` | Get CSRF token | Public |
 
 ### Products
 
@@ -350,6 +354,23 @@ Query params for listing: `page`, `limit`, `category`, `brand`, `status`, `searc
 | GET | `/api/v1/marketing/campaigns` | List campaigns | Public |
 | GET | `/api/v1/marketing/coupons` | List coupons | Public |
 | GET | `/api/v1/marketing/promotions` | List promotions | Public |
+| POST | `/api/v1/marketing/campaigns` | Create campaign | Admin |
+| PUT | `/api/v1/marketing/campaigns/:id` | Update campaign | Admin |
+| DELETE | `/api/v1/marketing/campaigns/:id` | Delete campaign | Admin |
+| POST | `/api/v1/marketing/coupons` | Create coupon | Admin |
+| PUT | `/api/v1/marketing/coupons/:id` | Update coupon | Admin |
+| DELETE | `/api/v1/marketing/coupons/:id` | Delete coupon | Admin |
+| POST | `/api/v1/marketing/promotions` | Create promotion | Admin |
+| PUT | `/api/v1/marketing/promotions/:id` | Update promotion | Admin |
+| DELETE | `/api/v1/marketing/promotions/:id` | Delete promotion | Admin |
+
+### Payments
+
+| Method | Endpoint | Description | Auth |
+|--------|----------|-------------|------|
+| POST | `/api/v1/payments/paystack/initialize` | Initialize Paystack payment | User |
+| POST | `/api/v1/payments/paystack/verify` | Verify Paystack payment | User |
+| POST | `/api/v1/payments/paystack/webhook` | Paystack webhook | Public |
 
 ### Account
 
@@ -408,10 +429,9 @@ Test suites cover:
 - Authentication flows (register, login, admin login, logout)
 - Product CRUD and filtering
 - Order creation and stock management
-- Repair request submission and tracking
-- Contact form submission
 - Brand and category management
 - Marketing endpoints
+- Payment verification and webhooks
 - Security headers and XSS protection
 - Account features
 

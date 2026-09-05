@@ -103,6 +103,13 @@ router.post('/login', authLimiter, [
       });
     }
 
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your account has been deactivated'
+      });
+    }
+
     if (user.isLocked()) {
       return res.status(429).json({
         success: false,
@@ -124,17 +131,9 @@ router.post('/login', authLimiter, [
       });
     }
 
-    // Successful login: clear failed-attempt history and any lock.
     user.failedLoginAttempts = 0;
     user.lockUntil = null;
     await user.save();
-
-    if (!user.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: 'Your account has been deactivated'
-      });
-    }
 
     const token = await issueSession(user, req);
 
@@ -304,6 +303,13 @@ router.post('/admin/login', authLimiter, [
       });
     }
 
+    if (!user.isActive) {
+      return res.status(401).json({
+        success: false,
+        message: 'Your account has been deactivated'
+      });
+    }
+
     if (user.isLocked()) {
       return res.status(429).json({
         success: false,
@@ -328,13 +334,6 @@ router.post('/admin/login', authLimiter, [
     user.failedLoginAttempts = 0;
     user.lockUntil = null;
     await user.save();
-
-    if (!user.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: 'Your account has been deactivated'
-      });
-    }
 
     const token = await issueSession(user, req);
 
