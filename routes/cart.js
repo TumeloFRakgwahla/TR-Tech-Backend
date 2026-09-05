@@ -27,7 +27,15 @@ router.get('/', authenticate, async (req, res) => {
   try {
     let cart = await Cart.findOne({ user: req.user._id });
     if (!cart) {
-      cart = await Cart.create({ user: req.user._id, items: [] });
+      try {
+        cart = await Cart.create({ user: req.user._id, items: [] });
+      } catch (createError) {
+        if (createError.code === 11000) {
+          cart = await Cart.findOne({ user: req.user._id });
+        } else {
+          throw createError;
+        }
+      }
     }
     res.json({ success: true, data: cart.items });
   } catch (error) {
@@ -49,7 +57,15 @@ router.post('/', authenticate, cartItemValidation, validate, async (req, res) =>
 
     let cart = await Cart.findOne({ user: req.user._id });
     if (!cart) {
-      cart = await Cart.create({ user: req.user._id, items: [] });
+      try {
+        cart = await Cart.create({ user: req.user._id, items: [] });
+      } catch (createError) {
+        if (createError.code === 11000) {
+          cart = await Cart.findOne({ user: req.user._id });
+        } else {
+          throw createError;
+        }
+      }
     }
 
     const existingIndex = cart.items.findIndex(
