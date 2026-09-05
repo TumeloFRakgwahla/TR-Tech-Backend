@@ -34,8 +34,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 const connectSrc = isDev
-  ? ["'self'", "https://wa.me", "https://api.trtech.co.za", "https://api.paystack.co"]
-  : ["'self'", "https://wa.me", "https://api.trtech.co.za", "https://api.paystack.co"];
+  ? ["'self'", "https://wa.me", "https://tr-tech-frontend.vercel.app", "https://api.paystack.co"]
+  : ["'self'", "https://wa.me", "https://tr-tech-frontend.vercel.app", "https://api.paystack.co"];
 
 // Helmet sets security-related HTTP headers. The CSP below is intentionally strict:
 // - defaultSrc 'self': blocks all external resources by default
