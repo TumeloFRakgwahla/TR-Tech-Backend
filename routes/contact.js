@@ -13,9 +13,9 @@ const contactLimiter = createPublicLimiter();
 
 const contactValidation = [
   body('name').trim().notEmpty().withMessage('Name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
-  body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
-  body('phone').trim().notEmpty().withMessage('Phone number is required'),
-  body('subject').trim().notEmpty().withMessage('Subject is required').isLength({ max: 200 }).withMessage('Subject cannot exceed 200 characters'),
+  body('email').optional().isEmail().withMessage('Please enter a valid email').normalizeEmail(),
+  body('phone').optional().trim().isLength({ max: 20 }).withMessage('Phone number cannot exceed 20 characters'),
+  body('subject').optional().trim().isLength({ max: 200 }).withMessage('Subject cannot exceed 200 characters'),
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 1000 }).withMessage('Message cannot exceed 1000 characters')
 ];
 
