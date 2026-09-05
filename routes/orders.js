@@ -8,6 +8,7 @@ const Order = require('../models/Order');
 const Product = require('../models/Product');
 const { toSafeString } = require('../utils/query');
 const { authenticateAdmin, optionalAuthenticate } = require('../middleware/auth');
+const { createPublicLimiter } = require('../middleware/rateLimiter');
 const {
   createOrder,
   getOrders,
@@ -15,6 +16,8 @@ const {
   updateOrder,
   deleteOrder,
 } = require('../services/orderService');
+
+const trackLimiter = createPublicLimiter();
 
 const orderItemValidation = [
   body('items').isArray({ min: 1 }).withMessage('Order must contain at least one item'),
@@ -65,11 +68,9 @@ router.get('/my-orders', optionalAuthenticate, async (req, res) => {
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    const [orders, total] = await Promise.all([
-      getOrders({ userId: req.user._id }, pageNum, limitNum),
-    ]);
+    const { orders, total } = await getOrders({ userId: req.user._id }, pageNum, limitNum);
 
-    sendPaginated(res, orders.orders, total, pageNum, limitNum);
+    sendPaginated(res, orders, total, pageNum, limitNum);
   } catch (error) {
     serverError(res, error);
   }
@@ -167,9 +168,10 @@ router.get('/', authenticateAdmin, async (req, res) => {
 // Public order tracking by order ID or customer phone number.
 // No authentication required so WhatsApp customers can track their orders.
 // Must be defined before /:id to avoid Express matching 'track' as a route parameter.
-router.get('/track', async (req, res) => {
+router.get('/track', trackLimiter, async (req, res) => {
   try {
-    const { orderId, phone } = req.query;
+    const orderId = toSafeString(req.query.orderId);
+    const phone = toSafeString(req.query.phone);
 
     if (!orderId && !phone) {
       return res.status(400).json({ success: false, message: 'Please provide an order ID or phone number' });

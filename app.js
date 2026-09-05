@@ -1,12 +1,11 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
-const path = require('path');
-const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+const { createAuthLimiter, createApiLimiter, createPublicLimiter } = require('./middleware/rateLimiter');
 const sanitize = require('./middleware/sanitize');
 const requestId = require('./middleware/requestId');
-const { createAuthLimiter, createApiLimiter } = require('./middleware/rateLimiter');
 const registerRoutes = require('./routes');
 
 const app = express();
@@ -93,7 +92,7 @@ app.use('/uploads', (req, res, next) => {
 // CSRF endpoint: generates a random token, stores it in an HTTP-only cookie, and returns it
 // to the client. The client must send this token back in the X-CSRF-Token header for
 // non-GET requests. This double-submit cookie pattern prevents CSRF without server-side state.
-app.get('/api/csrf-token', (req, res) => {
+app.get('/api/csrf-token', createApiLimiter(), (req, res) => {
   const token = crypto.randomBytes(32).toString('hex');
   res.cookie('csrf_token', token, {
     httpOnly: true,
