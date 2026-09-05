@@ -8,7 +8,8 @@ const mongoose = require('mongoose');
 const orderItemSchema = new mongoose.Schema({
   product: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product'
+    ref: 'Product',
+    required: [true, 'Product reference is required for each order item']
   },
   name: String,
   condition: String,
