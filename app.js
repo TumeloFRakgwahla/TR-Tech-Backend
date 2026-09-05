@@ -34,8 +34,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 
 const connectSrc = isDev
-  ? ["'self'", "https://wa.me", "https://api.trtech.co.za"]
-  : ["'self'", "https://wa.me", "https://api.trtech.co.za"];
+  ? ["'self'", "https://wa.me", "https://tr-tech-frontend.vercel.app", "https://api.paystack.co"]
+  : ["'self'", "https://wa.me", "https://tr-tech-frontend.vercel.app", "https://api.paystack.co"];
 
 // Helmet sets security-related HTTP headers. The CSP below is intentionally strict:
 // - defaultSrc 'self': blocks all external resources by default
@@ -68,9 +68,26 @@ app.use(helmet({
 
 app.use(createApiLimiter());
 
+// Webhook raw body parser MUST run before any JSON parser so HMAC signature
+// verification receives the unmodified payload bytes.
+app.use('/api/v1/payments/paystack/webhook', express.raw({ type: 'application/json' }));
+
 // Limit request body size to 100KB to mitigate large-payload attacks and reduce memory usage.
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ extended: false, limit: '100kb' }));
+// Skip JSON/urlencoded parsing for the webhook path because the raw body is already captured above.
+const jsonParser = express.json({ limit: '100kb' });
+const urlencodedParser = express.urlencoded({ extended: false, limit: '100kb' });
+app.use((req, res, next) => {
+  if (req.path === '/api/v1/payments/paystack/webhook') {
+    return next();
+  }
+  jsonParser(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.path === '/api/v1/payments/paystack/webhook') {
+    return next();
+  }
+  urlencodedParser(req, res, next);
+});
 app.use(cookieParser());
 app.use(sanitize);
 

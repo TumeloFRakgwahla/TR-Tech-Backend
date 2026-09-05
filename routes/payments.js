@@ -192,7 +192,6 @@ router.post(
 
 router.post(
   '/paystack/webhook',
-  express.raw({ type: 'application/json' }),
   async (req, res) => {
     const signature = req.headers['x-paystack-signature'];
 
