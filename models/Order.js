@@ -69,7 +69,7 @@ const orderSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['Pending', 'Processing', 'Shipped', 'Delivered', 'Completed', 'Cancelled'],
+    enum: ['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Completed', 'Cancelled'],
     default: 'Pending'
   },
   paymentMethod: {
@@ -83,6 +83,11 @@ const orderSchema = new mongoose.Schema({
     default: 'Pending'
   },
   notes: String,
+  coupon: {
+    code: String,
+    discount: Number,
+    type: String,
+  },
   paystackReference: {
     type: String,
     index: true,

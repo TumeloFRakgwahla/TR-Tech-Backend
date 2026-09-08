@@ -88,8 +88,9 @@ const optionalAuthenticate = async (req, res, next) => {
 
 // authenticateAdmin: required middleware for admin-only routes.
 // Reads the adminAuthToken cookie, verifies the JWT, ensures the user is active,
-// checks the role is 'admin', and validates the session is still active.
-const authenticateAdmin = async (req, res, next) => {
+// checks the role is one of the allowed admin roles, and validates the session is still active.
+// Accepts optional allowed roles array; defaults to ['admin', 'manager', 'staff'].
+const authenticateAdmin = async (req, res, next, allowedRoles = ['admin', 'manager', 'staff']) => {
   try {
     const token = req.cookies?.adminAuthToken;
 
@@ -108,7 +109,7 @@ const authenticateAdmin = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Account has been deactivated.' });
     }
 
-    if (user.role !== 'admin') {
+    if (!allowedRoles.includes(user.role)) {
       return res.status(403).json({ success: false, message: 'Access denied. Insufficient permissions.' });
     }
 
@@ -128,4 +129,18 @@ const authenticateAdmin = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticate, authenticateAdmin, authorize, optionalAuthenticate };
+// authorizeAdmin: role-based access control factory for admin routes.
+// Usage: authorizeAdmin('admin', 'manager') — allows only users with one of the specified roles.
+const authorizeAdmin = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ success: false, message: 'Access denied. Not authenticated.' });
+    }
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: 'Access denied. Insufficient permissions.' });
+    }
+    next();
+  };
+};
+
+module.exports = { authenticate, authenticateAdmin, authorizeAdmin, authorize, optionalAuthenticate };

@@ -296,7 +296,7 @@ router.post('/admin/login', authLimiter, [
       });
     }
 
-    if (user.role !== 'admin') {
+    if (!['admin', 'manager', 'staff'].includes(user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Access denied. Admin credentials required.'

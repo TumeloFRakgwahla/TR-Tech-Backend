@@ -3,7 +3,6 @@ const dotenv = require('dotenv');
 const path = require('path');
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 const User = require('../models/User');
-const bcrypt = require('bcryptjs');
 
 const seedAdmin = async () => {
   try {
@@ -21,7 +20,7 @@ const seedAdmin = async () => {
       admin.isActive = true;
       admin.failedLoginAttempts = 0;
       admin.lockUntil = null;
-      admin.password = await bcrypt.hash(adminPassword, 12);
+      admin.password = adminPassword;
       await admin.save();
       console.log(`Updated existing user to admin: ${adminEmail}`);
     } else {
@@ -29,7 +28,7 @@ const seedAdmin = async () => {
         firstName: 'Admin',
         lastName: 'User',
         email: adminEmail,
-        password: await bcrypt.hash(adminPassword, 12),
+        password: adminPassword,
         phone: '0645104733',
         role: 'admin',
         isActive: true,
