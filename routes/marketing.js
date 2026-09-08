@@ -83,6 +83,58 @@ router.get('/promotions', async (req, res) => {
   }
 });
 
+// Public endpoint: validate a coupon code for a given cart total and optional product/category filters.
+router.get('/coupons/validate', async (req, res) => {
+  try {
+    const { code, cartTotal, products, categories } = req.query;
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'Coupon code is required' });
+    }
+
+    const coupon = await Coupon.findOne({ code: code.toUpperCase(), status: 'Active' });
+    if (!coupon) {
+      return res.status(404).json({ success: false, message: 'Invalid or expired coupon code' });
+    }
+
+    if (coupon.expires && new Date() > new Date(coupon.expires)) {
+      return res.status(400).json({ success: false, message: 'This coupon has expired' });
+    }
+
+    const total = parseFloat(cartTotal);
+    if (isNaN(total) || total < coupon.minOrder) {
+      return res.status(400).json({ success: false, message: `Minimum order of R${coupon.minOrder} required` });
+    }
+
+    if (coupon.products && coupon.products.length > 0) {
+      const productIds = Array.isArray(products) ? products : [];
+      const hasMatchingProduct = coupon.products.some(p => productIds.includes(String(p)));
+      if (!hasMatchingProduct) {
+        return res.status(400).json({ success: false, message: 'This coupon is not valid for the items in your cart' });
+      }
+    }
+
+    if (coupon.categories && coupon.categories.length > 0) {
+      const cartCategories = Array.isArray(categories) ? categories : [];
+      const hasMatchingCategory = coupon.categories.some(c => cartCategories.includes(c));
+      if (!hasMatchingCategory) {
+        return res.status(400).json({ success: false, message: 'This coupon is not valid for the categories in your cart' });
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        code: coupon.code,
+        discount: coupon.discount,
+        type: coupon.type,
+        minOrder: coupon.minOrder,
+      },
+    });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
 // All routes below this middleware require admin authentication.
 router.use(authenticateAdmin);
 
@@ -92,6 +144,8 @@ router.post('/coupons', [
   body('discount').isFloat({ min: 0 }).withMessage('Discount must be a non-negative number'),
   body('type').optional().isIn(['Percentage', 'Fixed']),
   body('minOrder').optional().isFloat({ min: 0 }),
+  body('products').optional().isArray().withMessage('Products must be an array'),
+  body('categories').optional().isArray().withMessage('Categories must be an array'),
 ], validate, async (req, res) => {
   try {
     const coupon = await Coupon.create({
@@ -101,6 +155,8 @@ router.post('/coupons', [
       minOrder: req.body.minOrder || 0,
       expires: req.body.expires || undefined,
       status: req.body.status || 'Active',
+      products: req.body.products || [],
+      categories: req.body.categories || [],
     });
     res.status(201).json({ success: true, data: coupon });
   } catch (error) {
@@ -118,9 +174,11 @@ router.put('/coupons/:id', [
   body('type').optional().isIn(['Percentage', 'Fixed']),
   body('minOrder').optional().isFloat({ min: 0 }),
   body('status').optional().isIn(['Active', 'Inactive']),
+  body('products').optional().isArray().withMessage('Products must be an array'),
+  body('categories').optional().isArray().withMessage('Categories must be an array'),
 ], validate, async (req, res) => {
   try {
-    const { code, discount, type, minOrder, expires, status } = req.body;
+    const { code, discount, type, minOrder, expires, status, products, categories } = req.body;
     const updateData = {};
     if (code !== undefined) updateData.code = code;
     if (discount !== undefined) updateData.discount = discount;
@@ -128,6 +186,8 @@ router.put('/coupons/:id', [
     if (minOrder !== undefined) updateData.minOrder = minOrder;
     if (expires !== undefined) updateData.expires = expires;
     if (status !== undefined) updateData.status = status;
+    if (products !== undefined) updateData.products = products;
+    if (categories !== undefined) updateData.categories = categories;
     const coupon = await Coupon.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true });
     if (!coupon) return res.status(404).json({ success: false, message: 'Coupon not found' });
     res.json({ success: true, data: coupon });

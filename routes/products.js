@@ -34,6 +34,7 @@ const sanitizeProductUrls = (product) => {
 
 const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+  body('sku').trim().notEmpty().withMessage('SKU is required').isLength({ max: 50 }).withMessage('SKU cannot exceed 50 characters'),
   body('description').trim().notEmpty().withMessage('Product description is required').isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
   body('category').trim().notEmpty().withMessage('Category is required'),
   body('brand').trim().notEmpty().withMessage('Brand is required'),
@@ -73,7 +74,8 @@ router.get('/', async (req, res) => {
       const safeSearch = escapeRegex(search);
       query.$or = [
         { name: { $regex: safeSearch, $options: 'i' } },
-        { description: { $regex: safeSearch, $options: 'i' } }
+        { description: { $regex: safeSearch, $options: 'i' } },
+        { sku: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
@@ -104,11 +106,12 @@ router.get('/:id', async (req, res) => {
 // Create a new product. Admin-only.
 router.post('/', authenticateAdmin, productValidation, validate, async (req, res) => {
   try {
-    const { name, description, category, brand, price, condition, image, images, stock, status } = req.body;
+    const { name, description, category, brand, price, condition, image, images, stock, status, sku } = req.body;
     const product = await createProduct({
       name, description, category, brand, price, condition,
       image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock,
       status: status || 'Active',
+      sku: sku || `SKU-${Date.now().toString(36).toUpperCase()}`,
     });
     res.status(201).json({ success: true, data: sanitizeProductUrls(product) });
   } catch (error) {
@@ -119,10 +122,11 @@ router.post('/', authenticateAdmin, productValidation, validate, async (req, res
 // Update a product by ID. Admin-only.
 router.put('/:id', authenticateAdmin, productValidation, validate, async (req, res) => {
   try {
-    const { name, description, category, brand, price, condition, image, images, stock, status } = req.body;
+    const { name, description, category, brand, price, condition, image, images, stock, status, sku } = req.body;
     const product = await updateProduct(req.params.id, {
       name, description, category, brand, price, condition,
-      image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock, status
+      image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock, status,
+      ...(sku ? { sku } : {}),
     });
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });

@@ -26,6 +26,14 @@ const productSchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'Name cannot exceed 100 characters']
   },
+  sku: {
+    type: String,
+    required: [true, 'SKU is required'],
+    unique: true,
+    trim: true,
+    uppercase: true,
+    maxlength: [50, 'SKU cannot exceed 50 characters']
+  },
   description: {
     type: String,
     required: [true, 'Product description is required'],

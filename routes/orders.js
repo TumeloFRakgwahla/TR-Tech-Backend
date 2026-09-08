@@ -6,6 +6,9 @@ const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+const Repair = require('../models/Repair');
+const Notification = require('../models/Notification');
+const Coupon = require('../models/Coupon');
 const { toSafeString } = require('../utils/query');
 const { authenticateAdmin, optionalAuthenticate } = require('../middleware/auth');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
@@ -30,7 +33,7 @@ const orderItemValidation = [
 ];
 
 const orderUpdateValidation = [
-  body('status').optional().isIn(['Pending', 'Processing', 'Shipped', 'Delivered', 'Completed', 'Cancelled']).withMessage('Invalid status'),
+  body('status').optional().isIn(['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Completed', 'Cancelled']).withMessage('Invalid status'),
   body('paymentStatus').optional().isIn(['Pending', 'Paid', 'Refunded']).withMessage('Invalid payment status')
 ];
 
@@ -102,12 +105,14 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
     const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
-    const [currentStats, previousStats, allStats, currentOrderCount, previousOrderCount] = await Promise.all([
+    const [currentStats, previousStats, allStats, currentOrderCount, previousOrderCount, currentRepairCount, lowStockCount] = await Promise.all([
       Order.aggregate(buildStatsPipeline({ createdAt: { $gte: currentMonthStart } })),
       Order.aggregate(buildStatsPipeline({ createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } })),
       Order.aggregate(buildStatsPipeline({})),
       Order.countDocuments({ createdAt: { $gte: currentMonthStart } }),
       Order.countDocuments({ createdAt: { $gte: previousMonthStart, $lte: previousMonthEnd } }),
+      Repair.countDocuments({ status: { $nin: ['Completed', 'Cancelled'] } }),
+      Product.countDocuments({ stock: { $lte: 10 }, status: 'Active' }),
     ]);
 
     const currentRevenue = currentStats[0]?.revenue || 0;
@@ -121,6 +126,7 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
     const totalOrders = await Order.countDocuments({});
     const totalCustomers = allStats[0]?.customers || 0;
     const productsSold = allStats[0]?.productsSold || 0;
+    const activeRepairs = currentRepairCount || 0;
 
     const revenueChange = previousRevenue > 0 ? Number(((currentRevenue - previousRevenue) / previousRevenue * 100).toFixed(1)) : 0;
     const ordersChange = previousOrderCount > 0 ? Number(((currentOrderCount - previousOrderCount) / previousOrderCount * 100).toFixed(1)) : 0;
@@ -138,6 +144,8 @@ router.get('/stats', authenticateAdmin, async (req, res) => {
         ordersChange,
         customersChange,
         salesChange,
+        activeRepairs,
+        lowStockCount,
       },
     });
   } catch (error) {
@@ -216,12 +224,55 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 // Stock is deducted atomically in orderService.createOrder.
 router.post('/', optionalAuthenticate, orderItemValidation, validate, async (req, res) => {
   try {
-    const { items, customer, paymentMethod, notes } = req.body;
+    const { items, customer, paymentMethod, notes, coupon, totalAmount } = req.body;
+    let computedTotal = 0;
+    let discount = 0;
+
+    if (coupon && coupon.code) {
+      const couponDoc = await Coupon.findOne({ code: coupon.code.toUpperCase(), status: 'Active' });
+      if (!couponDoc) {
+        return res.status(400).json({ success: false, message: 'Invalid coupon code' });
+      }
+      if (couponDoc.expires && new Date() > new Date(couponDoc.expires)) {
+        return res.status(400).json({ success: false, message: 'Coupon has expired' });
+      }
+
+      const productIds = items.map(i => typeof i.product === 'object' ? i.product._id || i.product : i.product);
+      if (couponDoc.products && couponDoc.products.length > 0) {
+        const hasMatch = couponDoc.products.some(p => productIds.includes(String(p)));
+        if (!hasMatch) {
+          return res.status(400).json({ success: false, message: 'Coupon not valid for items in cart' });
+        }
+      }
+
+      const categories = items.map(i => i.category).filter(Boolean);
+      if (couponDoc.categories && couponDoc.categories.length > 0) {
+        const hasMatch = couponDoc.categories.some(c => categories.includes(c));
+        if (!hasMatch) {
+          return res.status(400).json({ success: false, message: 'Coupon not valid for cart categories' });
+        }
+      }
+
+      for (const item of items) {
+        computedTotal += (item.price || 0) * (item.quantity || 0);
+      }
+      if (computedTotal < couponDoc.minOrder) {
+        return res.status(400).json({ success: false, message: `Minimum order of R${couponDoc.minOrder} required` });
+      }
+
+      discount = couponDoc.type === 'Percentage'
+        ? (computedTotal * couponDoc.discount) / 100
+        : couponDoc.discount;
+    }
+
     const order = await createOrder({
       items,
       customer,
       paymentMethod,
       notes,
+      coupon,
+      discount,
+      totalAmount: totalAmount,
       userId: req.user ? req.user._id : undefined,
     });
     res.status(201).json({ success: true, data: order });
@@ -239,9 +290,56 @@ router.put('/:id', authenticateAdmin, orderUpdateValidation, validate, async (re
     if (paymentStatus !== undefined) updateData.paymentStatus = paymentStatus;
     if (notes !== undefined) updateData.notes = notes;
 
+    const existingOrder = await Order.findById(req.params.id);
+    if (!existingOrder) {
+      return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
     const order = await updateOrder(req.params.id, updateData);
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    if (status === 'Cancelled' && existingOrder.status !== 'Cancelled') {
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.quantity } });
+      }
+      if (order.userId) {
+        await Notification.create({
+          userId: order.userId,
+          type: 'order',
+          title: 'Order Cancelled',
+          message: `Order #${String(order._id).slice(-6).toUpperCase()} has been cancelled.`,
+          data: { orderId: order._id, status: 'Cancelled' },
+        });
+      }
+    }
+
+    if (paymentStatus === 'Refunded' && existingOrder.paymentStatus !== 'Refunded') {
+      for (const item of order.items) {
+        await Product.findByIdAndUpdate(item.product, { $inc: { stock: item.quantity } });
+      }
+      if (order.userId) {
+        await Notification.create({
+          userId: order.userId,
+          type: 'order',
+          title: 'Payment Refunded',
+          message: `Payment for order #${String(order._id).slice(-6).toUpperCase()} has been refunded.`,
+          data: { orderId: order._id, paymentStatus: 'Refunded' },
+        });
+      }
+    }
+
+    if (status && status !== existingOrder.status && status !== 'Cancelled') {
+      if (order.userId) {
+        await Notification.create({
+          userId: order.userId,
+          type: 'order',
+          title: 'Order Status Updated',
+          message: `Order #${String(order._id).slice(-6).toUpperCase()} is now ${status}.`,
+          data: { orderId: order._id, status },
+        });
+      }
     }
 
     res.json({ success: true, data: order });
