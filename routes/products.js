@@ -150,4 +150,24 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get unique categories from products. Public endpoint for dropdown population.
+router.get('/categories/unique', async (req, res) => {
+  try {
+    const categories = await Product.distinct('category', { status: 'Active' });
+    res.json({ success: true, data: categories.sort() });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
+// Get unique brands from products. Public endpoint for dropdown population.
+router.get('/brands/unique', async (req, res) => {
+  try {
+    const brands = await Product.distinct('brand', { status: 'Active' });
+    res.json({ success: true, data: brands.sort() });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
 module.exports = router;
