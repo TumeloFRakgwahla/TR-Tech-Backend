@@ -50,17 +50,13 @@ const authorize = (...allowedRoles) => {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Access denied. Not authenticated.' });
     }
-
     if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({ success: false, message: 'Access denied. Insufficient permissions.' });
     }
-
     next();
   };
 };
 
-// optionalAuthenticate: like authenticate but does not reject unauthenticated requests.
-// Used for endpoints that behave differently for logged-in users (e.g., guest checkout).
 const optionalAuthenticate = async (req, res, next) => {
   try {
     const token = req.cookies?.authToken;
@@ -141,39 +137,6 @@ const authorizeAdmin = (...allowedRoles) => {
   };
 };
 
-const authorize = (...allowedRoles) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Access denied. Not authenticated.' });
-    }
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'Access denied. Insufficient permissions.' });
-    }
-    next();
-  };
-};
-
-const optionalAuthenticate = async (req, res, next) => {
-  try {
-    const token = req.cookies?.authToken;
-    if (!token) return next();
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(decoded.id);
-    if (user && user.isActive) {
-      const session = await Session.findOne({ tokenIdentifier: decoded.jti, userId: user._id, isActive: true });
-      if (session) {
-        req.user = user;
-        if (!session.lastActive || Date.now() - new Date(session.lastActive).getTime() > 5 * 60 * 1000) {
-          Session.updateOne({ _id: session._id }, { $set: { lastActive: new Date() } }).catch(() => {});
-        }
-      }
-    }
-  } catch {
-    // Invalid/expired token: treat as guest, continue unauthenticated.
-  }
-  next();
-};
-
 const requireTwoFactor = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({ success: false, message: 'Access denied. Not authenticated.' });
@@ -199,4 +162,3 @@ module.exports = {
   optionalAuthenticate,
   requireTwoFactor
 };
-module.exports = { authenticate, authenticateAdmin, authorizeAdmin, authorize, optionalAuthenticate };

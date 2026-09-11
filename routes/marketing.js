@@ -103,7 +103,8 @@ router.get('/coupons/validate', async (req, res) => {
     const total = parseFloat(cartTotal);
     if (isNaN(total)) {
       return res.status(400).json({ success: false, message: 'Invalid cart total' });
-    if (isNaN(total) || total < coupon.minOrder) {
+    }
+    if (total < coupon.minOrder) {
       return res.status(400).json({ success: false, message: `Minimum order of R${coupon.minOrder} required` });
     }
 
