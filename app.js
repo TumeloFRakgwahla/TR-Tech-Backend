@@ -7,6 +7,7 @@ const cookieParser = require('cookie-parser');
 const { createAuthLimiter, createApiLimiter, createPublicLimiter } = require('./middleware/rateLimiter');
 const sanitize = require('./middleware/sanitize');
 const requestId = require('./middleware/requestId');
+const { logActivity } = require('./middleware/auditLog');
 const registerRoutes = require('./routes');
 
 const app = express();
@@ -14,12 +15,11 @@ const app = express();
 // Assign a unique request ID to every incoming request for distributed tracing and log correlation.
 app.use(requestId);
 
-// Trust the single proxy in front of the app (Nginx, Heroku, ELB, etc.) so that
-// express-rate-limit and req.ip reflect the real client IP instead of the proxy's.
-// Increase the number if requests traverse multiple proxies.
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
+// Trust the proxy in front of the app so req.ip reflects the real client IP.
+// This is required for rate limiting, geo-restrictions, and accurate logging
+// when deployed behind Nginx, Vercel, Heroku, ELB, Cloudflare, etc.
+// Set to 1 for a single reverse proxy; increase if requests traverse multiple proxies.
+app.set('trust proxy', 1);
 
 const isDev = process.env.NODE_ENV === 'development';
 // Treat Vercel deployments as production even if NODE_ENV was not set explicitly,
@@ -44,7 +44,14 @@ const connectSrc = isDev
 // - imgSrc allows data URIs and HTTPS images for product images
 // - connectSrc allows API calls to the backend and WhatsApp
 // - frameSrc/frameAncestors prevent clickjacking
-app.use(helmet({
+//
+// Cross-origin policies:
+// - COOP/COEP are disabled because the app embeds WhatsApp chat widgets and may
+//   embed other third-party content (Paystack, analytics). Enabling them would
+//   break these cross-origin embeds. If cross-origin embeds are removed in the
+//   future, enable crossOriginEmbedderPolicy: "require-corp" and
+//   crossOriginOpenerPolicy: "same-origin" for stronger isolation.
+const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -65,7 +72,19 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: false,
   crossOriginOpenerPolicy: false,
-}));
+});
+
+if (isProd) {
+  helmetMiddleware.set({
+    strictTransportSecurity: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  });
+}
+
+app.use(helmetMiddleware);
 
 app.use(createApiLimiter());
 
@@ -126,11 +145,9 @@ app.get('/', (req, res) => {
   res.json({ status: 'OK', message: 'TR-Tech Backend is running' });
 });
 
-registerRoutes(app);
+app.use(logActivity);
 
-app.get('/api/v1/health', (req, res) => {
-  res.json({ status: 'OK', message: 'TR-Tech Backend is running' });
-});
+registerRoutes(app);
 
 // Centralized error-handling middleware. Must be registered after all routes.
 // - 400/parse errors: invalid JSON payload

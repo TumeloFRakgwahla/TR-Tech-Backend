@@ -33,6 +33,9 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
     "multer": "^2.0.2",
+    "nodemailer": "^6.9.7",
+    "otpauth": "^9.3.3",
+    "speakeasy": "^2.0.0",
     "validator": "^13.15.26",
     "zod": "^4.4.3"
   },

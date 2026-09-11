@@ -6,7 +6,8 @@ const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const User = require('../models/User');
 const Session = require('../models/Session');
-const { authenticateAdmin } = require('../middleware/auth');
+const ActivityLog = require('../models/ActivityLog');
+const { authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { toSafeString, escapeRegex } = require('../utils/query');
 
 const DEFAULT_ROLE_PERMISSIONS = {
@@ -86,7 +87,7 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 // Update a user by ID. Admin-only.
 // Password is explicitly stripped from the update payload because findByIdAndUpdate
 // does not run the pre('save') hook — a plaintext password would be stored as-is.
-router.put('/:id', authenticateAdmin, userValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, requireTwoFactor, userValidation, validate, async (req, res) => {
   try {
     // Strip password from mass-assignment: findByIdAndUpdate does not run the
     // pre('save') hook, so a plaintext password in the body would be stored as-is.
@@ -108,7 +109,7 @@ router.put('/:id', authenticateAdmin, userValidation, validate, async (req, res)
 // Reset a user's password. Admin-only.
 // Uses document.save() so the pre('save') hook hashes the password.
 // Invalidates all active sessions after a password reset.
-router.put('/:id/password', authenticateAdmin, passwordResetValidation, validate, async (req, res) => {
+router.put('/:id/password', authenticateAdmin, requireTwoFactor, passwordResetValidation, validate, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     if (!user) {
@@ -130,7 +131,7 @@ router.put('/:id/password', authenticateAdmin, passwordResetValidation, validate
 });
 
 // Delete a user by ID. Admin-only.
-router.delete('/:id', authenticateAdmin, async (req, res) => {
+router.delete('/:id', authenticateAdmin, requireTwoFactor, async (req, res) => {
   try {
     const user = await User.findByIdAndDelete(req.params.id);
     if (!user) {
@@ -206,10 +207,29 @@ router.delete('/roles/:id', authenticateAdmin, async (req, res) => {
 // Get activity logs. Admin-only.
 router.get('/activity-logs', authenticateAdmin, async (req, res) => {
   try {
-    const { page = 1, limit = 50 } = req.query;
+    const { page = 1, limit = 50, action, userRole, statusCode, userId, startDate, endDate } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
-    res.json({ success: true, data: [], total: 0, page: pageNum, limit: limitNum });
+    const skip = (pageNum - 1) * limitNum;
+
+    const query = {};
+    if (action) query.action = action;
+    if (userRole) query.userRole = userRole;
+    if (statusCode) query.statusCode = parseInt(statusCode, 10);
+    if (userId) query.userId = userId;
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const [logs, total] = await Promise.all([
+      ActivityLog.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+      ActivityLog.countDocuments(query)
+    ]);
+
+    sendPaginated(res, logs, total, pageNum, limitNum);
   } catch (error) {
     serverError(res, error);
   }
@@ -226,7 +246,7 @@ router.get('/admins', authenticateAdmin, async (req, res) => {
 });
 
 // Update a user's role. Admin-only.
-router.put('/:id/role', authenticateAdmin, async (req, res) => {
+router.put('/:id/role', authenticateAdmin, requireTwoFactor, async (req, res) => {
   try {
     const { role } = req.body;
     if (!['customer', 'admin', 'manager', 'staff'].includes(role)) {
@@ -243,7 +263,7 @@ router.put('/:id/role', authenticateAdmin, async (req, res) => {
 });
 
 // Toggle user active status. Admin-only.
-router.put('/:id/status', authenticateAdmin, async (req, res) => {
+router.put('/:id/status', authenticateAdmin, requireTwoFactor, async (req, res) => {
   try {
     const { isActive } = req.body;
     const user = await User.findByIdAndUpdate(req.params.id, { isActive }, { new: true }).select('-password');

@@ -35,6 +35,19 @@ const sessionSchema = new mongoose.Schema({
     type: String,
     trim: true
   },
+  deviceType: {
+    type: String,
+    trim: true,
+    default: 'Desktop'
+  },
+  browser: {
+    type: String,
+    trim: true
+  },
+  location: {
+    type: String,
+    trim: true
+  },
   isActive: {
     type: Boolean,
     default: true
@@ -42,6 +55,10 @@ const sessionSchema = new mongoose.Schema({
   lastActive: {
     type: Date,
     default: Date.now
+  },
+  twoFactorVerified: {
+    type: Boolean,
+    default: false
   },
   expiresAt: {
     type: Date,

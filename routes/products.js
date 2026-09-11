@@ -6,7 +6,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Product = require('../models/Product');
-const { authenticateAdmin } = require('../middleware/auth');
+const { authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { toSafeString, escapeRegex } = require('../utils/query');
 const {
   createProduct,
@@ -104,7 +104,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create a new product. Admin-only.
-router.post('/', authenticateAdmin, productValidation, validate, async (req, res) => {
+router.post('/', authenticateAdmin, requireTwoFactor, productValidation, validate, async (req, res) => {
   try {
     const { name, description, category, brand, price, condition, image, images, stock, status, sku } = req.body;
     const product = await createProduct({
@@ -120,7 +120,7 @@ router.post('/', authenticateAdmin, productValidation, validate, async (req, res
 });
 
 // Update a product by ID. Admin-only.
-router.put('/:id', authenticateAdmin, productValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, requireTwoFactor, productValidation, validate, async (req, res) => {
   try {
     const { name, description, category, brand, price, condition, image, images, stock, status, sku } = req.body;
     const product = await updateProduct(req.params.id, {
@@ -138,7 +138,7 @@ router.put('/:id', authenticateAdmin, productValidation, validate, async (req, r
 });
 
 // Delete a product by ID. Admin-only.
-router.delete('/:id', authenticateAdmin, async (req, res) => {
+router.delete('/:id', authenticateAdmin, requireTwoFactor, async (req, res) => {
   try {
     const product = await deleteProduct(req.params.id);
     if (!product) {

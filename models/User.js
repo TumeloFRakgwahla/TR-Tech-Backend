@@ -88,6 +88,28 @@ const userSchema = new mongoose.Schema({
     whatsappUpdates: { type: Boolean, default: true },
     pushNotifications: { type: Boolean, default: false },
     frequency: { type: String, default: 'instant', enum: ['instant', 'daily', 'weekly'] }
+  },
+  twoFactorEnabled: {
+    type: Boolean,
+    default: false
+  },
+  twoFactorSecret: {
+    type: String,
+    select: false
+  },
+  twoFactorBackupCodes: {
+    type: [String],
+    select: false
+  },
+  twoFactorConfirmedAt: {
+    type: Date
+  },
+  passwordResetToken: {
+    type: String,
+    select: false
+  },
+  passwordResetExpires: {
+    type: Date
   }
 }, {
   timestamps: true,
@@ -132,6 +154,38 @@ userSchema.methods.generateEmailVerificationToken = function() {
   this.emailVerificationToken = crypto.createHash('sha256').update(token).digest('hex');
   this.emailVerificationExpires = Date.now() + 24 * 60 * 60 * 1000;
   return token;
+};
+
+userSchema.methods.generatePasswordResetToken = function() {
+  const token = crypto.randomBytes(32).toString('hex');
+  this.passwordResetToken = crypto.createHash('sha256').update(token).digest('hex');
+  this.passwordResetExpires = Date.now() + 60 * 60 * 1000;
+  return token;
+};
+
+userSchema.methods.generateTwoFactorSecret = function() {
+  const secret = crypto.randomBytes(20).toString('hex');
+  this.twoFactorSecret = secret;
+  return secret;
+};
+
+userSchema.methods.generateBackupCodes = function() {
+  const codes = [];
+  for (let i = 0; i < 10; i++) {
+    codes.push(crypto.randomBytes(5).toString('hex').toUpperCase());
+  }
+  this.twoFactorBackupCodes = codes;
+  return codes;
+};
+
+userSchema.methods.verifyTwoFactorToken = function(token) {
+  if (!this.twoFactorSecret) return false;
+  const normalizedToken = token.replace(/\s/g, '');
+  if (this.twoFactorBackupCodes && this.twoFactorBackupCodes.includes(normalizedToken.toUpperCase())) {
+    this.twoFactorBackupCodes = this.twoFactorBackupCodes.filter((code) => code !== normalizedToken.toUpperCase());
+    return true;
+  }
+  return false;
 };
 
 module.exports = mongoose.model('User', userSchema);

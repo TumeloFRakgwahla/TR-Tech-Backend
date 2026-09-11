@@ -84,6 +84,29 @@ const productSchema = new mongoose.Schema({
     type: String,
     enum: ['Active', 'Inactive', 'Out of Stock'],
     default: 'Active'
+  },
+  originalPrice: {
+    type: Number,
+    min: [0, 'Original price cannot be negative']
+  },
+  compareAtPrice: {
+    type: Number,
+    min: [0, 'Compare at price cannot be negative']
+  },
+  rating: {
+    type: Number,
+    min: [0, 'Rating cannot be negative'],
+    max: [5, 'Rating cannot exceed 5'],
+    default: 0
+  },
+  reviews: {
+    type: Number,
+    min: [0, 'Reviews count cannot be negative'],
+    default: 0
+  },
+  inStock: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true,
