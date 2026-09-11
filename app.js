@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
+const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
@@ -150,6 +151,17 @@ app.get('/', (req, res) => {
   res.json({ status: 'OK', message: 'TR-Tech Backend is running' });
 });
 
+app.get('/api/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.json({
+    status: 'OK',
+    message: 'TR-Tech Backend is running',
+    environment: process.env.NODE_ENV || 'development',
+    database: dbStatus,
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.use(logActivity);
 
 registerRoutes(app);
@@ -176,12 +188,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-if (process.env.NODE_ENV === 'production') {
+if (isProd) {
   const frontendDist = path.join(__dirname, 'frontend-build');
   app.use(express.static(frontendDist));
 
-  // Static public routes that exist in the frontend SPA.
-  // Dynamic routes (product detail, account, admin) are matched by prefix below.
   const STATIC_ROUTES = new Set([
     '/about',
     '/services',
@@ -195,7 +205,6 @@ if (process.env.NODE_ENV === 'production') {
     '/order-confirmation',
   ]);
 
-  // Prefix-based matching for dynamic routes with path params.
   const DYNAMIC_ROUTE_PREFIXES = [
     '/products/',
     '/account/',
@@ -210,10 +219,6 @@ if (process.env.NODE_ENV === 'production') {
     return false;
   };
 
-  // Catch-all for client-side routing. Known routes serve index.html with 200
-  // so the SPA renders normally. Unknown paths serve index.html with 404 so
-  // React Router renders NotFoundPage but the HTTP status is correct for SEO
-  // (prevents soft-404).
   app.get('*', (req, res) => {
     if (isKnownRoute(req.path)) {
       return res.sendFile(path.join(frontendDist, 'index.html'));
