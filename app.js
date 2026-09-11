@@ -75,19 +75,14 @@ const helmetMiddleware = helmet({
   crossOriginOpenerPolicy: false,
 });
 
-// HSTS (HTTP Strict Transport Security) is only enabled in production because:
-// - Local development typically runs over HTTP (http://localhost:3000/5000)
-// - Enabling HSTS in dev would tell browsers to refuse HTTP connections,
-//   breaking local development workflows
-// - In production/Vercel, all traffic is served over HTTPS, so HSTS is safe
 if (isProd) {
-  helmetMiddleware.set({
+  app.use(helmet({
     strictTransportSecurity: {
       maxAge: 31536000,
       includeSubDomains: true,
       preload: true,
     },
-  });
+  }));
 }
 
 app.use(helmetMiddleware);
