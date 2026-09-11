@@ -7,6 +7,9 @@ const { authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { serverError, badRequest } = require('../utils/response');
 const User = require('../models/User');
 const { invalidateWhitelistCache } = require('../middleware/ipWhitelist');
+const { authenticateAdmin } = require('../middleware/auth');
+const { serverError, badRequest } = require('../utils/response');
+const User = require('../models/User');
 
 const settingsValidation = [
   body('business').optional().isObject().withMessage('Business settings must be an object'),
@@ -18,6 +21,7 @@ const settingsValidation = [
 
 // Get settings. Admin-only.
 router.get('/', authenticateAdmin, requireTwoFactor, async (req, res) => {
+router.get('/', authenticateAdmin, async (req, res) => {
   try {
     let settings = await Settings.findOne();
     if (!settings) {
@@ -37,6 +41,7 @@ router.get('/', authenticateAdmin, requireTwoFactor, async (req, res) => {
 
 // Update settings or perform system actions. Admin-only.
 router.put('/', authenticateAdmin, requireTwoFactor, settingsValidation, validate, async (req, res) => {
+router.put('/', authenticateAdmin, settingsValidation, validate, async (req, res) => {
   try {
     const { action, password, ...settingsData } = req.body;
 

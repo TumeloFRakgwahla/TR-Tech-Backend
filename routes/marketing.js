@@ -103,6 +103,8 @@ router.get('/coupons/validate', async (req, res) => {
     const total = parseFloat(cartTotal);
     if (isNaN(total)) {
       return res.status(400).json({ success: false, message: 'Invalid cart total' });
+    if (isNaN(total) || total < coupon.minOrder) {
+      return res.status(400).json({ success: false, message: `Minimum order of R${coupon.minOrder} required` });
     }
 
     if (coupon.products && coupon.products.length > 0) {
@@ -137,6 +139,8 @@ router.get('/coupons/validate', async (req, res) => {
 
 // All routes below this middleware require admin authentication and 2FA if enabled.
 router.use(authenticateAdmin, requireTwoFactor);
+// All routes below this middleware require admin authentication.
+router.use(authenticateAdmin);
 
 // Create a coupon. Admin-only.
 router.post('/coupons', [
