@@ -230,10 +230,6 @@ router.get('/activity-logs', authenticateAdmin, async (req, res) => {
     ]);
 
     sendPaginated(res, logs, total, pageNum, limitNum);
-    const { page = 1, limit = 50 } = req.query;
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
-    res.json({ success: true, data: [], total: 0, page: pageNum, limit: limitNum });
   } catch (error) {
     serverError(res, error);
   }
@@ -251,7 +247,6 @@ router.get('/admins', authenticateAdmin, async (req, res) => {
 
 // Update a user's role. Admin-only.
 router.put('/:id/role', authenticateAdmin, requireTwoFactor, async (req, res) => {
-router.put('/:id/role', authenticateAdmin, async (req, res) => {
   try {
     const { role } = req.body;
     if (!['customer', 'admin', 'manager', 'staff'].includes(role)) {
@@ -269,7 +264,6 @@ router.put('/:id/role', authenticateAdmin, async (req, res) => {
 
 // Toggle user active status. Admin-only.
 router.put('/:id/status', authenticateAdmin, requireTwoFactor, async (req, res) => {
-router.put('/:id/status', authenticateAdmin, async (req, res) => {
   try {
     const { isActive } = req.body;
     const user = await User.findByIdAndUpdate(req.params.id, { isActive }, { new: true }).select('-password');

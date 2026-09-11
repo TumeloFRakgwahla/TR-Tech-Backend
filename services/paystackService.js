@@ -12,9 +12,9 @@ const getSecretKey = () => {
 };
 
 const getWebhookSecret = () => {
-  const key = process.env.PAYSTACK_WEBHOOK_SECRET;
+  const key = process.env.PAYSTACK_SECRET_KEY;
   if (!key || key.length < 10) {
-    throw new Error('PAYSTACK_WEBHOOK_SECRET environment variable is not configured');
+    throw new Error('PAYSTACK_SECRET_KEY environment variable is not configured');
   }
   return key;
 };
