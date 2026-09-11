@@ -10,7 +10,7 @@ const Repair = require('../models/Repair');
 const Notification = require('../models/Notification');
 const Coupon = require('../models/Coupon');
 const { toSafeString } = require('../utils/query');
-const { authenticateAdmin, optionalAuthenticate } = require('../middleware/auth');
+const { authenticateAdmin, optionalAuthenticate, requireTwoFactor } = require('../middleware/auth');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
 const {
   createOrder,
@@ -282,7 +282,8 @@ router.post('/', optionalAuthenticate, orderItemValidation, validate, async (req
 });
 
 // Update order status or payment status. Admin-only.
-router.put('/:id', authenticateAdmin, orderUpdateValidation, validate, async (req, res) => {
+// Explicitly blocks customer-initiated cancellations to prevent unauthorized order voids.
+router.put('/:id', authenticateAdmin, requireTwoFactor, orderUpdateValidation, validate, async (req, res) => {
   try {
     const { status, paymentStatus, notes } = req.body;
     const updateData = {};
@@ -293,6 +294,11 @@ router.put('/:id', authenticateAdmin, orderUpdateValidation, validate, async (re
     const existingOrder = await Order.findById(req.params.id);
     if (!existingOrder) {
       return res.status(404).json({ success: false, message: 'Order not found' });
+    }
+
+    const isAdmin = ['admin', 'manager', 'staff'].includes(req.user.role);
+    if (status === 'Cancelled' && !isAdmin) {
+      return res.status(403).json({ success: false, message: 'Only administrators can cancel orders' });
     }
 
     const order = await updateOrder(req.params.id, updateData);
@@ -352,7 +358,7 @@ router.put('/:id', authenticateAdmin, orderUpdateValidation, validate, async (re
 });
 
 // Delete an order by ID. Admin-only.
-router.delete('/:id', authenticateAdmin, async (req, res) => {
+router.delete('/:id', authenticateAdmin, requireTwoFactor, async (req, res) => {
   try {
     const order = await deleteOrder(req.params.id);
     if (!order) {

@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const { authenticateAdmin } = require('../middleware/auth');
+const { authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { serverError, badRequest } = require('../utils/response');
 const { sendPaginated } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/query');
@@ -34,8 +34,8 @@ router.get('/active', async (req, res) => {
   }
 });
 
-// All routes below this middleware require admin authentication.
-router.use(authenticateAdmin);
+// All routes below this middleware require admin authentication and 2FA if enabled.
+router.use(authenticateAdmin, requireTwoFactor);
 
 // List categories with optional search, status filter, and pagination.
 router.get('/', async (req, res) => {

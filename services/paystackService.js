@@ -11,6 +11,14 @@ const getSecretKey = () => {
   return key;
 };
 
+const getWebhookSecret = () => {
+  const key = process.env.PAYSTACK_WEBHOOK_SECRET;
+  if (!key || key.length < 10) {
+    throw new Error('PAYSTACK_WEBHOOK_SECRET environment variable is not configured');
+  }
+  return key;
+};
+
 const getPaystackClient = () => {
   const client = axios.create({
     baseURL: PAYSTACK_BASE_URL,
@@ -60,7 +68,7 @@ const verifyTransaction = async (reference) => {
 };
 
 const verifyWebhookSignature = (signature, payload) => {
-  const secret = getSecretKey();
+  const secret = getWebhookSecret();
   if (!signature) return false;
 
   let payloadString;
