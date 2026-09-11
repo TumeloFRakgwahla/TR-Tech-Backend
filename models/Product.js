@@ -28,7 +28,7 @@ const productSchema = new mongoose.Schema({
   },
   sku: {
     type: String,
-    required: [true, 'SKU is required'],
+    required: false,
     unique: true,
     trim: true,
     uppercase: true,
@@ -117,6 +117,24 @@ const productSchema = new mongoose.Schema({
     { key: { category: 1, status: 1 } },
     { key: { name: 'text', description: 'text' } }
   ]
+});
+
+function generateSku(name) {
+  const slug = (name || 'PROD')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase()
+    .slice(0, 24);
+  const stamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `${slug}-${stamp}-${rand}`;
+}
+
+productSchema.pre('validate', function (next) {
+  if (!this.sku) {
+    this.sku = generateSku(this.name);
+  }
+  next();
 });
 
 module.exports = mongoose.model('Product', productSchema);
