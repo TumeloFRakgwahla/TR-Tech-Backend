@@ -37,7 +37,7 @@
     "otpauth": "^9.3.3",
     "speakeasy": "^2.0.0",
     "validator": "^13.15.26",
-    "zod": "^4.4.3"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "jest": "^29.7.0",
