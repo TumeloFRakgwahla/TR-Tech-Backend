@@ -128,4 +128,19 @@ const authenticateAdmin = async (req, res, next) => {
   }
 };
 
-module.exports = { authenticate, authenticateAdmin, authorize, optionalAuthenticate };
+// requireEmailVerified: middleware that blocks authenticated users whose email
+// is not yet verified. Returns 403 with a machine-readable flag so the client
+// can prompt re-verification. Unauthenticated requests pass through (caller
+// should chain after authenticate/optionalAuthenticate).
+const requireEmailVerified = (req, res, next) => {
+  if (req.user && !req.user.emailVerified) {
+    return res.status(403).json({
+      success: false,
+      message: 'Please verify your email address to continue.',
+      requiresEmailVerification: true,
+    });
+  }
+  next();
+};
+
+module.exports = { authenticate, authenticateAdmin, authorize, optionalAuthenticate, requireEmailVerified };

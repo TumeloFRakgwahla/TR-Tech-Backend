@@ -7,6 +7,7 @@ const cartRoutes = require('./cart');
 const categoriesRoutes = require('./categories');
 const contactRoutes = require('./contact');
 const marketingRoutes = require('./marketing');
+const notificationsRoutes = require('./notifications');
 const ordersRoutes = require('./orders');
 const paymentMethodsRoutes = require('./paymentMethods');
 const paymentsRoutes = require('./payments');
@@ -14,6 +15,8 @@ const productsRoutes = require('./products');
 const repairsRoutes = require('./repairs');
 const seoRoutes = require('./seo');
 const servicesRoutes = require('./services');
+const settingsRoutes = require('./settings');
+const supportRoutes = require('./support');
 const uploadRoutes = require('./upload');
 const usersRoutes = require('./users');
 const wishlistRoutes = require('./wishlist');
@@ -26,6 +29,7 @@ const routeRegistry = [
   { path: '/api/v1/categories', routes: categoriesRoutes },
   { path: '/api/v1/contact', routes: contactRoutes },
   { path: '/api/v1/marketing', routes: marketingRoutes },
+  { path: '/api/v1/notifications', routes: notificationsRoutes },
   { path: '/api/v1/orders', routes: ordersRoutes },
   { path: '/api/v1/payment-methods', routes: paymentMethodsRoutes },
   { path: '/api/v1/payments', routes: paymentsRoutes },
@@ -33,6 +37,8 @@ const routeRegistry = [
   { path: '/api/v1/repairs', routes: repairsRoutes },
   { path: '/', routes: seoRoutes },
   { path: '/api/v1/services', routes: servicesRoutes },
+  { path: '/api/v1/settings', routes: settingsRoutes },
+  { path: '/api/v1/support', routes: supportRoutes },
   { path: '/api/v1/upload', routes: uploadRoutes },
   { path: '/api/v1/users', routes: usersRoutes },
   { path: '/api/v1/wishlist', routes: wishlistRoutes },

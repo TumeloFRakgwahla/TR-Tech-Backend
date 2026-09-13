@@ -7,13 +7,12 @@ const { issueSession, revokeSession, isSessionActive } = require('../utils/sessi
 const User = require('../models/User');
 const { authenticate, authenticateAdmin } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');
+const { sendVerificationEmail } = require('../utils/mail');
 
 const router = express.Router();
 
 const authLimiter = createAuthLimiter();
 
-// Treat Vercel deployments as production so cookies use Secure + SameSite=None
-// (required for cross-site XHR from the separate frontend Vercel domain).
 const isProd = process.env.NODE_ENV === 'production' || process.env.VERCEL === '1';
 const cookieBaseOptions = {
   httpOnly: true,
@@ -21,6 +20,54 @@ const cookieBaseOptions = {
   sameSite: isProd ? 'none' : 'lax',
   path: '/',
 };
+
+const captchaStore = new Map();
+const CAPTCHA_TTL = 5 * 60 * 1000;
+
+const generateCaptchaImage = (text) => {
+  const chars = text.split('');
+  const charElements = chars.map((char, i) => {
+    const x = 20 + i * 30;
+    const y = 45;
+    const r1 = Math.sin(i * 0.8) * 3;
+    const r2 = Math.cos(i * 0.7) * 3;
+    return `<text x="${x}" y="${y}" font-family="monospace" font-size="24" font-weight="bold" fill="rgb(40,40,40)" transform="rotate(${r1} ${x} ${y})">${char}</text>`;
+  }).join('');
+
+  const lines = Array.from({ length: 3 }, (_, i) => {
+    const x1 = 5 + i * 60;
+    const x2 = x1 + 40 + Math.random() * 40;
+    const y1 = 15 + Math.random() * 10;
+    const y2 = 55 + Math.random() * 10;
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="rgb(120,120,120)" stroke-width="1"/>`;
+  }).join('');
+
+  return `data:image/svg+xml;base64,${Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="180" height="80" viewBox="0 0 180 80">
+<rect width="180" height="80" fill="rgb(245,245,245)" rx="8"/>
+${charElements}
+${lines}
+</svg>`).toString('base64')}`;
+};
+
+router.get('/admin/captcha', async (req, res) => {
+  try {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const code = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const captchaId = crypto.randomBytes(16).toString('hex');
+
+    captchaStore.set(captchaId, {
+      code: code.toUpperCase(),
+      expires: Date.now() + CAPTCHA_TTL,
+    });
+
+    const image = generateCaptchaImage(code);
+    res.json({ success: true, captchaId, image });
+  } catch (error) {
+    console.error('Captcha generation error:', error);
+    res.status(500).json({ success: false, message: 'Failed to generate captcha' });
+  }
+});
 
 // Register a new customer account.
 // Rate limited to prevent abuse. Generates an email verification token.
@@ -53,10 +100,9 @@ router.post('/register', authLimiter, [
 
     const verificationToken = user.generateEmailVerificationToken();
     await user.save();
-    // TODO: send verification email via provider (nodemailer/SendGrid).
-    // Verification tokens must never be logged to stdout or persisted in logs
-    // — they are single-use secrets. In non-production environments the token
-    // is returned to the caller via the API response only if explicitly needed.
+    sendVerificationEmail(user.email, `${user.firstName} ${user.lastName}`, verificationToken).catch((err) => {
+      console.error('Failed to send verification email:', err);
+    });
 
     const token = await issueSession(user, req);
 
@@ -272,7 +318,9 @@ router.post('/resend-verification', [
     }
     const verificationToken = user.generateEmailVerificationToken();
     await user.save();
-    // Verification tokens must never be logged — they are single-use secrets.
+    sendVerificationEmail(user.email, `${user.firstName} ${user.lastName}`, verificationToken).catch((err) => {
+      console.error('Failed to send verification email:', err);
+    });
     res.json({ success: true, message: 'If that email exists and is unverified, a verification link has been sent' });
   } catch (error) {
     console.error('Resend verification error:', error);
@@ -283,10 +331,25 @@ router.post('/resend-verification', [
 // Admin login route. Requires role === 'admin'.
 router.post('/admin/login', authLimiter, [
   body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
-  body('password').notEmpty().withMessage('Password is required')
+  body('password').notEmpty().withMessage('Password is required'),
+  body('captchaId').optional().isString(),
+  body('captchaCode').optional().isString(),
 ], validate, async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, captchaId, captchaCode } = req.body;
+
+    if (captchaId && captchaCode) {
+      const stored = captchaStore.get(captchaId);
+      if (!stored || stored.expires < Date.now()) {
+        captchaStore.delete(captchaId);
+        return res.status(400).json({ success: false, message: 'Captcha has expired. Please try again.' });
+      }
+      if (stored.code !== captchaCode.toUpperCase()) {
+        captchaStore.delete(captchaId);
+        return res.status(400).json({ success: false, message: 'Invalid captcha code' });
+      }
+      captchaStore.delete(captchaId);
+    }
 
     const user = await User.findOne({ email }).select('+password');
     if (!user) {

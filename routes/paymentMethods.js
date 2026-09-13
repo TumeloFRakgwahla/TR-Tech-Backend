@@ -3,11 +3,11 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const PaymentMethod = require('../models/PaymentMethod');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireEmailVerified } = require('../middleware/auth');
 const { serverError } = require('../utils/response');
 
 // All payment-method routes are authenticated and strictly scoped to req.user._id.
-router.use(authenticate);
+router.use(authenticate, requireEmailVerified);
 
 // List the current user's saved payment methods, sorted by default first.
 router.get('/', async (req, res) => {

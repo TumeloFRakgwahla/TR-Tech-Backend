@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { body } = require('express-validator');
+const { body, query } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticateAdmin } = require('../middleware/auth');
 const Coupon = require('../models/Coupon');
@@ -9,6 +9,61 @@ const Promotion = require('../models/Promotion');
 const { serverError } = require('../utils/response');
 const { sendPaginated } = require('../utils/pagination');
 const { escapeRegex } = require('../utils/query');
+
+const validateCouponQuery = [
+  query('code').notEmpty().withMessage('Coupon code is required'),
+  query('cartTotal').notEmpty().withMessage('Cart total is required'),
+];
+
+router.get('/coupons/validate', validateCouponQuery, validate, async (req, res) => {
+  try {
+    const { code, cartTotal } = req.query;
+    const cartTotalNum = parseFloat(cartTotal);
+
+    if (isNaN(cartTotalNum) || cartTotalNum < 0) {
+      return res.status(400).json({ success: false, message: 'Invalid cart total' });
+    }
+
+    const coupon = await Coupon.findOne({
+      code: code.toString().toUpperCase(),
+      status: 'Active',
+    });
+
+    if (!coupon) {
+      return res.json({ success: false, message: 'Invalid or expired coupon code' });
+    }
+
+    if (coupon.expires && new Date(coupon.expires) < new Date()) {
+      return res.json({ success: false, message: 'This coupon has expired' });
+    }
+
+    if (cartTotalNum < coupon.minOrder) {
+      return res.json({
+        success: false,
+        message: `Minimum order of $${coupon.minOrder.toFixed(2)} required for this coupon`,
+      });
+    }
+
+    const discountAmount = coupon.type === 'Percentage'
+      ? (cartTotalNum * coupon.discount) / 100
+      : Math.min(coupon.discount, cartTotalNum);
+
+    res.json({
+      success: true,
+      data: {
+        code: coupon.code,
+        discount: coupon.discount,
+        type: coupon.type,
+        minOrder: coupon.minOrder,
+        expires: coupon.expires,
+        discountAmount: parseFloat(discountAmount.toFixed(2)),
+        finalTotal: parseFloat((cartTotalNum - discountAmount).toFixed(2)),
+      },
+    });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
 
 // Public endpoint: list active coupons with optional search.
 router.get('/coupons', async (req, res) => {

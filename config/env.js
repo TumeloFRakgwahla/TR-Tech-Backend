@@ -10,6 +10,15 @@ const envSchema = z.object({
   FRONTEND_URL: z.string().url('FRONTEND_URL must be a valid URL').default('http://localhost:5173'),
   PAYSTACK_SECRET_KEY: z.string().min(10, 'PAYSTACK_SECRET_KEY is required').default(''),
   PAYSTACK_PUBLIC_KEY: z.string().min(10, 'PAYSTACK_PUBLIC_KEY is required').default(''),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_SECURE: z.string().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_FROM: z.string().optional(),
+  SENDGRID_API_KEY: z.string().optional(),
+  SENDGRID_FROM: z.string().optional(),
+  ADMIN_EMAIL: z.string().email('ADMIN_EMAIL must be a valid email').optional(),
 });
 
 // Parse and validate environment variables. Called at application startup.
