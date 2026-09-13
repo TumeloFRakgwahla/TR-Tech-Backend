@@ -27,10 +27,16 @@ const repairSchema = new mongoose.Schema({
   },
   issue: { type: String, required: true },
   additionalInfo: { type: String },
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    index: true,
+    default: null,
+  },
   status: {
     type: String,
-    enum: ['Pending', 'In Progress', 'Completed', 'Cancelled'],
-    default: 'Pending',
+    enum: ['New', 'Diagnosing', 'Awaiting Parts', 'In Progress', 'Ready', 'Completed', 'Cancelled'],
+    default: 'New',
   },
   estimatedCost: { type: Number },
   notes: { type: String },

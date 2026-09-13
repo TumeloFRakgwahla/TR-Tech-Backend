@@ -6,7 +6,7 @@ const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Product = require('../models/Product');
-const { authenticateAdmin } = require('../middleware/auth');
+const { authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { toSafeString, escapeRegex } = require('../utils/query');
 const {
   createProduct,
@@ -34,6 +34,7 @@ const sanitizeProductUrls = (product) => {
 
 const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+  body('sku').trim().notEmpty().withMessage('SKU is required').isLength({ max: 50 }).withMessage('SKU cannot exceed 50 characters'),
   body('description').trim().notEmpty().withMessage('Product description is required').isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
   body('category').trim().notEmpty().withMessage('Category is required'),
   body('brand').trim().notEmpty().withMessage('Brand is required'),
@@ -73,7 +74,8 @@ router.get('/', async (req, res) => {
       const safeSearch = escapeRegex(search);
       query.$or = [
         { name: { $regex: safeSearch, $options: 'i' } },
-        { description: { $regex: safeSearch, $options: 'i' } }
+        { description: { $regex: safeSearch, $options: 'i' } },
+        { sku: { $regex: safeSearch, $options: 'i' } }
       ];
     }
 
@@ -132,13 +134,14 @@ router.get('/:id', async (req, res) => {
 });
 
 // Create a new product. Admin-only.
-router.post('/', authenticateAdmin, productValidation, validate, async (req, res) => {
+router.post('/', authenticateAdmin, requireTwoFactor, productValidation, validate, async (req, res) => {
   try {
-    const { name, description, category, brand, price, condition, image, images, stock, status } = req.body;
+    const { name, description, category, brand, price, condition, image, images, stock, status, sku } = req.body;
     const product = await createProduct({
       name, description, category, brand, price, condition,
       image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock,
       status: status || 'Active',
+      sku: sku || `SKU-${Date.now().toString(36).toUpperCase()}`,
     });
     res.status(201).json({ success: true, data: sanitizeProductUrls(product) });
   } catch (error) {
@@ -147,12 +150,13 @@ router.post('/', authenticateAdmin, productValidation, validate, async (req, res
 });
 
 // Update a product by ID. Admin-only.
-router.put('/:id', authenticateAdmin, productValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, requireTwoFactor, productValidation, validate, async (req, res) => {
   try {
-    const { name, description, category, brand, price, condition, image, images, stock, status } = req.body;
+    const { name, description, category, brand, price, condition, image, images, stock, status, sku } = req.body;
     const product = await updateProduct(req.params.id, {
       name, description, category, brand, price, condition,
-      image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock, status
+      image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock, status,
+      ...(sku ? { sku } : {}),
     });
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
@@ -164,13 +168,33 @@ router.put('/:id', authenticateAdmin, productValidation, validate, async (req, r
 });
 
 // Delete a product by ID. Admin-only.
-router.delete('/:id', authenticateAdmin, async (req, res) => {
+router.delete('/:id', authenticateAdmin, requireTwoFactor, async (req, res) => {
   try {
     const product = await deleteProduct(req.params.id);
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
     res.json({ success: true, message: 'Product deleted successfully' });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
+// Get unique categories from products. Public endpoint for dropdown population.
+router.get('/categories/unique', async (req, res) => {
+  try {
+    const categories = await Product.distinct('category', { status: 'Active' });
+    res.json({ success: true, data: categories.sort() });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
+// Get unique brands from products. Public endpoint for dropdown population.
+router.get('/brands/unique', async (req, res) => {
+  try {
+    const brands = await Product.distinct('brand', { status: 'Active' });
+    res.json({ success: true, data: brands.sort() });
   } catch (error) {
     serverError(res, error);
   }

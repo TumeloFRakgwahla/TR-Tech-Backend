@@ -26,6 +26,15 @@ const productSchema = new mongoose.Schema({
     trim: true,
     maxlength: [100, 'Name cannot exceed 100 characters']
   },
+  sku: {
+    type: String,
+    required: false,
+    required: [true, 'SKU is required'],
+    unique: true,
+    trim: true,
+    uppercase: true,
+    maxlength: [50, 'SKU cannot exceed 50 characters']
+  },
   description: {
     type: String,
     required: [true, 'Product description is required'],
@@ -76,6 +85,29 @@ const productSchema = new mongoose.Schema({
     type: String,
     enum: ['Active', 'Inactive', 'Out of Stock'],
     default: 'Active'
+  },
+  originalPrice: {
+    type: Number,
+    min: [0, 'Original price cannot be negative']
+  },
+  compareAtPrice: {
+    type: Number,
+    min: [0, 'Compare at price cannot be negative']
+  },
+  rating: {
+    type: Number,
+    min: [0, 'Rating cannot be negative'],
+    max: [5, 'Rating cannot exceed 5'],
+    default: 0
+  },
+  reviews: {
+    type: Number,
+    min: [0, 'Reviews count cannot be negative'],
+    default: 0
+  },
+  inStock: {
+    type: Boolean,
+    default: true
   }
 }, {
   timestamps: true,
@@ -86,6 +118,24 @@ const productSchema = new mongoose.Schema({
     { key: { category: 1, status: 1 } },
     { key: { name: 'text', description: 'text' } }
   ]
+});
+
+function generateSku(name) {
+  const slug = (name || 'PROD')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toUpperCase()
+    .slice(0, 24);
+  const stamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `${slug}-${stamp}-${rand}`;
+}
+
+productSchema.pre('validate', function (next) {
+  if (!this.sku) {
+    this.sku = generateSku(this.name);
+  }
+  next();
 });
 
 module.exports = mongoose.model('Product', productSchema);

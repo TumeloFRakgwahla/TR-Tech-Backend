@@ -8,6 +8,7 @@ const Repair = require('../models/Repair');
 const { authenticateAdmin, authenticate } = require('../middleware/auth');
 const { toSafeString } = require('../utils/query');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
+const Notification = require('../models/Notification');
 
 // Validation rules for creating a repair request.
 const repairValidation = [
@@ -26,12 +27,12 @@ const repairLimiter = createPublicLimiter();
 
 // Validation rules for updating a repair (admin-only).
 const repairUpdateValidation = [
-  body('status').optional().isIn(['Pending', 'In Progress', 'Completed', 'Cancelled']).withMessage('Invalid status'),
+  body('status').optional().isIn(['New', 'Diagnosing', 'Awaiting Parts', 'In Progress', 'Ready', 'Completed', 'Cancelled']).withMessage('Invalid status'),
   body('estimatedCost').optional().isFloat({ min: 0 }).withMessage('Estimated cost must be a positive number')
 ];
 
 // Submit a new repair request. Rate limited to prevent spam.
-// Status is always set to 'Pending' server-side; client input is ignored.
+// Status is always set to 'New' server-side; client input is ignored.
 router.post('/', repairLimiter, repairValidation, validate, async (req, res) => {
   try {
     const { customer, device, issue, additionalInfo, image } = req.body;
@@ -41,8 +42,8 @@ router.post('/', repairLimiter, repairValidation, validate, async (req, res) => 
       issue,
       additionalInfo,
       image,
-      // status and estimatedCost are server-controlled; never trust client input.
-      status: 'Pending',
+      userId: req.body.userId || null,
+      status: 'New',
     });
     res.status(201).json({ success: true, data: repair });
   } catch (error) {
@@ -113,6 +114,7 @@ router.put('/:id', authenticateAdmin, repairUpdateValidation, validate, async (r
     if (notes !== undefined) updateData.notes = notes;
     if (estimatedCost !== undefined) updateData.estimatedCost = estimatedCost;
 
+    const existingRepair = await Repair.findById(req.params.id);
     const repair = await Repair.findByIdAndUpdate(
       req.params.id,
       updateData,
@@ -121,6 +123,18 @@ router.put('/:id', authenticateAdmin, repairUpdateValidation, validate, async (r
 
     if (!repair) {
       return res.status(404).json({ success: false, message: 'Repair not found' });
+    }
+
+    if (status && status !== existingRepair.status) {
+      if (repair.userId) {
+        await Notification.create({
+          userId: repair.userId,
+          type: 'repair',
+          title: 'Repair Status Updated',
+          message: `Your repair request is now ${status}.`,
+          data: { repairId: repair._id, status },
+        });
+      }
     }
 
     res.json({ success: true, data: repair });

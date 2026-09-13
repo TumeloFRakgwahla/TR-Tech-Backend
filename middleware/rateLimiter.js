@@ -1,16 +1,15 @@
 const rateLimit = require('express-rate-limit');
 
-// Rate limiting is infrastructure; disable it under test so the in-memory
+// Rate limiting is infrastructure; disable it only under test so the in-memory
 // store doesn't accumulate across tests and block legitimate requests.
+// In all other environments, rate limiting is enabled by default.
 const isTest = process.env.NODE_ENV === 'test';
 const passthrough = () => (req, res, next) => next();
 
-const isDevelopment = process.env.NODE_ENV === 'development';
-
 // Auth limiter: restricts login and registration attempts to prevent credential stuffing.
-// 20 attempts per 15 minutes per IP in production.
+// 20 attempts per 15 minutes per IP.
 const createAuthLimiter = () => {
-  if (isTest || isDevelopment) return passthrough();
+  if (isTest) return passthrough();
   return rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 20,
@@ -21,9 +20,9 @@ const createAuthLimiter = () => {
 };
 
 // General API limiter: protects all API routes from abuse.
-// 100 requests per 15 minutes per IP in production.
+// 100 requests per 15 minutes per IP.
 const createApiLimiter = () => {
-  if (isTest || isDevelopment) return passthrough();
+  if (isTest) return passthrough();
   return rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
@@ -36,7 +35,7 @@ const createApiLimiter = () => {
 // Public limiter: for unauthenticated write endpoints (contact form, repair bookings).
 // Stricter limit of 10 requests per 15 minutes to prevent spam.
 const createPublicLimiter = () => {
-  if (isTest || isDevelopment) return passthrough();
+  if (isTest) return passthrough();
   return rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 10,

@@ -22,6 +22,7 @@ const createOrder = async (orderData) => {
   const reservedStock = [];
   const validatedItems = [];
   let computedTotal = 0;
+  let discount = orderData.discount || 0;
 
   for (const item of orderData.items) {
     const product = await Product.findById(item.product);
@@ -53,15 +54,18 @@ const createOrder = async (orderData) => {
     computedTotal += product.price * item.quantity;
   }
 
+  const finalTotal = Math.max(0, computedTotal - discount);
+
   const order = await Order.create({
     items: validatedItems,
     customer: orderData.customer,
     userId: orderData.userId,
-    totalAmount: computedTotal,
+    totalAmount: finalTotal,
     paymentMethod: orderData.paymentMethod,
     status: 'Pending',
     paymentStatus: 'Pending',
     notes: orderData.notes,
+    coupon: orderData.coupon || undefined,
   });
 
   if (orderData.userId) {

@@ -13,6 +13,7 @@ const paymentMethodsRoutes = require('./paymentMethods');
 const paymentsRoutes = require('./payments');
 const productsRoutes = require('./products');
 const repairsRoutes = require('./repairs');
+const reviewsRoutes = require('./reviews');
 const seoRoutes = require('./seo');
 const servicesRoutes = require('./services');
 const settingsRoutes = require('./settings');
@@ -24,6 +25,7 @@ const wishlistRoutes = require('./wishlist');
 const routeRegistry = [
   { path: '/api/v1/account', routes: accountRoutes },
   { path: '/api/v1/auth', routes: authRoutes },
+  { path: '/api/v1/auth/2fa', routes: twoFactorRoutes },
   { path: '/api/v1/brands', routes: brandsRoutes },
   { path: '/api/v1/cart', routes: cartRoutes },
   { path: '/api/v1/categories', routes: categoriesRoutes },
@@ -34,6 +36,7 @@ const routeRegistry = [
   { path: '/api/v1/payment-methods', routes: paymentMethodsRoutes },
   { path: '/api/v1/payments', routes: paymentsRoutes },
   { path: '/api/v1/products', routes: productsRoutes },
+  { path: '/api/v1/products/reviews', routes: reviewsRoutes },
   { path: '/api/v1/repairs', routes: repairsRoutes },
   { path: '/', routes: seoRoutes },
   { path: '/api/v1/services', routes: servicesRoutes },

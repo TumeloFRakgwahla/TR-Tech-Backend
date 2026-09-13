@@ -1,5 +1,7 @@
 const express = require('express');
 const path = require('path');
+const crypto = require('crypto');
+const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const crypto = require('crypto');
@@ -7,6 +9,7 @@ const cookieParser = require('cookie-parser');
 const { createAuthLimiter, createApiLimiter, createPublicLimiter } = require('./middleware/rateLimiter');
 const sanitize = require('./middleware/sanitize');
 const requestId = require('./middleware/requestId');
+const { logActivity } = require('./middleware/auditLog');
 const registerRoutes = require('./routes');
 
 const app = express();
@@ -14,12 +17,11 @@ const app = express();
 // Assign a unique request ID to every incoming request for distributed tracing and log correlation.
 app.use(requestId);
 
-// Trust the single proxy in front of the app (Nginx, Heroku, ELB, etc.) so that
-// express-rate-limit and req.ip reflect the real client IP instead of the proxy's.
-// Increase the number if requests traverse multiple proxies.
-if (process.env.NODE_ENV === 'production') {
-  app.set('trust proxy', 1);
-}
+// Trust the proxy in front of the app so req.ip reflects the real client IP.
+// This is required for rate limiting, geo-restrictions, and accurate logging
+// when deployed behind Nginx, Vercel, Heroku, ELB, Cloudflare, etc.
+// Set to 1 for a single reverse proxy; increase if requests traverse multiple proxies.
+app.set('trust proxy', 1);
 
 const isDev = process.env.NODE_ENV === 'development';
 // Treat Vercel deployments as production even if NODE_ENV was not set explicitly,
@@ -44,7 +46,14 @@ const connectSrc = isDev
 // - imgSrc allows data URIs and HTTPS images for product images
 // - connectSrc allows API calls to the backend and WhatsApp
 // - frameSrc/frameAncestors prevent clickjacking
-app.use(helmet({
+//
+// Cross-origin policies:
+// - COOP/COEP are disabled because the app embeds WhatsApp chat widgets and may
+//   embed other third-party content (Paystack, analytics). Enabling them would
+//   break these cross-origin embeds. If cross-origin embeds are removed in the
+//   future, enable crossOriginEmbedderPolicy: "require-corp" and
+//   crossOriginOpenerPolicy: "same-origin" for stronger isolation.
+const helmetMiddleware = helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -65,7 +74,19 @@ app.use(helmet({
   crossOriginEmbedderPolicy: false,
   crossOriginResourcePolicy: false,
   crossOriginOpenerPolicy: false,
-}));
+});
+
+if (isProd) {
+  app.use(helmet({
+    strictTransportSecurity: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+  }));
+}
+
+app.use(helmetMiddleware);
 
 app.use(createApiLimiter());
 
@@ -126,11 +147,20 @@ app.get('/', (req, res) => {
   res.json({ status: 'OK', message: 'TR-Tech Backend is running' });
 });
 
-registerRoutes(app);
-
-app.get('/api/v1/health', (req, res) => {
-  res.json({ status: 'OK', message: 'TR-Tech Backend is running' });
+app.get('/api/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.json({
+    status: 'OK',
+    message: 'TR-Tech Backend is running',
+    environment: process.env.NODE_ENV || 'development',
+    database: dbStatus,
+    timestamp: new Date().toISOString(),
+  });
 });
+
+app.use(logActivity);
+
+registerRoutes(app);
 
 // Centralized error-handling middleware. Must be registered after all routes.
 // - 400/parse errors: invalid JSON payload
@@ -154,12 +184,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-if (process.env.NODE_ENV === 'production') {
+if (isProd) {
   const frontendDist = path.join(__dirname, 'frontend-build');
   app.use(express.static(frontendDist));
 
-  // Static public routes that exist in the frontend SPA.
-  // Dynamic routes (product detail, account, admin) are matched by prefix below.
   const STATIC_ROUTES = new Set([
     '/about',
     '/services',
@@ -173,7 +201,6 @@ if (process.env.NODE_ENV === 'production') {
     '/order-confirmation',
   ]);
 
-  // Prefix-based matching for dynamic routes with path params.
   const DYNAMIC_ROUTE_PREFIXES = [
     '/products/',
     '/account/',
@@ -188,10 +215,6 @@ if (process.env.NODE_ENV === 'production') {
     return false;
   };
 
-  // Catch-all for client-side routing. Known routes serve index.html with 200
-  // so the SPA renders normally. Unknown paths serve index.html with 404 so
-  // React Router renders NotFoundPage but the HTTP status is correct for SEO
-  // (prevents soft-404).
   app.get('*', (req, res) => {
     if (isKnownRoute(req.path)) {
       return res.sendFile(path.join(frontendDist, 'index.html'));

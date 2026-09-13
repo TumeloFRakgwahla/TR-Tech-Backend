@@ -7,6 +7,8 @@ const couponSchema = new mongoose.Schema({
   minOrder: { type: Number, default: 0, min: 0 },
   expires: { type: Date },
   status: { type: String, enum: ['Active', 'Inactive'], default: 'Active' },
+  products: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Product' }],
+  categories: [{ type: String, trim: true }],
   }, {
   timestamps: true,
   indexes: [
