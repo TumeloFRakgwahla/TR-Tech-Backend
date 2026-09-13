@@ -18,6 +18,7 @@ const seoRoutes = require('./seo');
 const servicesRoutes = require('./services');
 const settingsRoutes = require('./settings');
 const supportRoutes = require('./support');
+const twoFactorRoutes = require('./twoFactor');
 const uploadRoutes = require('./upload');
 const usersRoutes = require('./users');
 const wishlistRoutes = require('./wishlist');
