@@ -2,10 +2,20 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Session = require('../models/Session');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required');
-}
+// Lazy getter for JWT_SECRET: read at call time rather than module load time.
+// This avoids crashing the entire module (and breaking all route exports) when
+// the env var is missing during deployment — the runtime returns an empty
+// exports object for a module that throws during require(). Instead, each
+// middleware below checks the secret when a request arrives.
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    const err = new Error('JWT_SECRET environment variable is required');
+    err.code = 'MISSING_JWT_SECRET';
+    throw err;
+  }
+  return secret;
+};
 
 const authenticate = async (req, res, next) => {
   try {
@@ -15,7 +25,7 @@ const authenticate = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Access denied. No token provided.' });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     const user = await User.findById(decoded.id);
 
     if (!user) {
@@ -61,7 +71,7 @@ const optionalAuthenticate = async (req, res, next) => {
   try {
     const token = req.cookies?.authToken;
     if (!token) return next();
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     const user = await User.findById(decoded.id);
     if (user && user.isActive) {
       const session = await Session.findOne({ tokenIdentifier: decoded.jti, userId: user._id, isActive: true });
@@ -90,7 +100,7 @@ const authenticateAdmin = async (req, res, next, allowedRoles = ['admin', 'manag
       return res.status(401).json({ success: false, message: 'Access denied. No admin token provided.' });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token, getJwtSecret());
     const user = await User.findById(decoded.id);
 
     if (!user) {
