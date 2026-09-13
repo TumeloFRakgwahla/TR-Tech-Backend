@@ -2,10 +2,13 @@ const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const Session = require('../models/Session');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-  throw new Error('JWT_SECRET environment variable is required');
-}
+const getJwtSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET environment variable is required');
+  }
+  return secret;
+};
 
 const TOKEN_TTL_DAYS = 30;
 
@@ -63,7 +66,7 @@ async function issueSession(user, req, options = {}) {
     twoFactorVerified: !!options.twoFactorVerified,
   });
 
-  return jwt.sign({ id: user._id, jti }, JWT_SECRET, { expiresIn: `${TOKEN_TTL_DAYS}d` });
+  return jwt.sign({ id: user._id, jti }, getJwtSecret(), { expiresIn: `${TOKEN_TTL_DAYS}d` });
 }
 
 // Revokes a session by marking it inactive. Used during logout.

@@ -47,6 +47,7 @@ const authenticate = async (req, res, next) => {
 
     req.user = user;
     req.session = session;
+    req.twoFactorVerified = session.twoFactorVerified || false;
     next();
   } catch (error) {
     return res.status(401).json({ success: false, message: 'Invalid or expired token.' });
@@ -148,4 +149,27 @@ const requireEmailVerified = (req, res, next) => {
   next();
 };
 
-module.exports = { authenticate, authenticateAdmin, authorize, optionalAuthenticate, requireEmailVerified };
+// requireTwoFactor: enforces two-factor authentication for admin actions.
+// Must be used after authenticate or authenticateAdmin (which sets req.user,
+// req.session, and req.twoFactorVerified). If the user has 2FA enabled but
+// the session has not been 2FA-verified (e.g., via /auth/2fa/verify), returns
+// 403 with a flag so the client can prompt for a verification code.
+const requireTwoFactor = (req, res, next) => {
+  const user = req.user;
+
+  if (!user) {
+    return res.status(401).json({ success: false, message: 'Access denied. Not authenticated.' });
+  }
+
+  if (user.twoFactorEnabled && !req.twoFactorVerified) {
+    return res.status(403).json({
+      success: false,
+      message: 'Two-factor authentication required. Please verify your 2FA token.',
+      requiresTwoFactor: true,
+    });
+  }
+
+  next();
+};
+
+module.exports = { authenticate, authenticateAdmin, authorize, optionalAuthenticate, requireEmailVerified, requireTwoFactor };
