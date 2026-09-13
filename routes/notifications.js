@@ -1,25 +1,33 @@
 const express = require('express');
-const router = express.Router();
-const { authenticateAdmin, authenticate, optionalAuthenticate } = require('../middleware/auth');
-const Notification = require('../models/Notification');
-const { serverError, badRequest } = require('../utils/response');
+const { body } = require('express-validator');
+const validate = require('../middleware/validate');
+const { authenticate, authenticateAdmin } = require('../middleware/auth');
+const { serverError } = require('../utils/response');
 const { sendPaginated } = require('../utils/pagination');
-const { toSafeString } = require('../utils/query');
+const { toSafeString, escapeRegex } = require('../utils/query');
+const Notification = require('../models/Notification');
 
-// Get notifications for the authenticated user.
+const router = express.Router();
+
 router.get('/', authenticate, async (req, res) => {
   try {
-    const { page = 1, limit = 20, read } = req.query;
+    const { page = 1, limit = 20 } = req.query;
+    let query = { userId: req.user._id };
+
+    const isRead = toSafeString(req.query.read);
+    if (isRead === 'true') query.read = true;
+    else if (isRead === 'false') query.read = false;
+
+    const type = toSafeString(req.query.type);
+    if (type) query.type = type;
+
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
 
-    let query = { userId: req.user._id };
-    if (read !== undefined) query.read = read === 'true';
-
     const [notifications, total] = await Promise.all([
       Notification.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      Notification.countDocuments(query),
+      Notification.countDocuments(query)
     ]);
 
     sendPaginated(res, notifications, total, pageNum, limitNum);
@@ -28,39 +36,23 @@ router.get('/', authenticate, async (req, res) => {
   }
 });
 
-// Get unread count for the authenticated user.
 router.get('/unread-count', authenticate, async (req, res) => {
   try {
-    const count = await Notification.countDocuments({ userId: req.user._id, read: false });
-    res.json({ success: true, count });
+    const count = await Notification.countDocuments({
+      userId: req.user._id,
+      read: false
+    });
+    res.json({ success: true, data: { unreadCount: count } });
   } catch (error) {
     serverError(res, error);
   }
 });
 
-// Mark a notification as read.
-router.put('/:id/read', authenticate, async (req, res) => {
-  try {
-    const notification = await Notification.findByIdAndUpdate(
-      req.params.id,
-      { read: true, readAt: new Date() },
-      { new: true }
-    );
-    if (!notification) {
-      return res.status(404).json({ success: false, message: 'Notification not found' });
-    }
-    res.json({ success: true, data: notification });
-  } catch (error) {
-    serverError(res, error);
-  }
-});
-
-// Mark all notifications as read for the authenticated user.
 router.put('/read-all', authenticate, async (req, res) => {
   try {
     await Notification.updateMany(
       { userId: req.user._id, read: false },
-      { read: true, readAt: new Date() }
+      { $set: { read: true, readAt: new Date() } }
     );
     res.json({ success: true, message: 'All notifications marked as read' });
   } catch (error) {
@@ -68,26 +60,57 @@ router.put('/read-all', authenticate, async (req, res) => {
   }
 });
 
-// Delete a notification.
-router.delete('/:id', authenticate, async (req, res) => {
+router.put('/:id/read', authenticate, async (req, res) => {
   try {
-    const notification = await Notification.findByIdAndDelete(req.params.id);
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, userId: req.user._id },
+      { read: true, readAt: new Date() },
+      { new: true }
+    );
+
     if (!notification) {
       return res.status(404).json({ success: false, message: 'Notification not found' });
     }
-    res.json({ success: true, message: 'Notification deleted successfully' });
+
+    res.json({ success: true, data: notification });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid notification ID' });
+    }
     serverError(res, error);
   }
 });
 
-// Admin: create a notification for a user.
-router.post('/send', authenticateAdmin, async (req, res) => {
+router.delete('/:id', authenticate, async (req, res) => {
+  try {
+    const notification = await Notification.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user._id
+    });
+
+    if (!notification) {
+      return res.status(404).json({ success: false, message: 'Notification not found' });
+    }
+
+    res.json({ success: true, message: 'Notification deleted successfully' });
+  } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid notification ID' });
+    }
+    serverError(res, error);
+  }
+});
+
+const sendValidation = [
+  body('userId').notEmpty().withMessage('userId is required'),
+  body('type').notEmpty().isIn(['order', 'repair', 'promotion', 'security', 'system']).withMessage('Invalid notification type'),
+  body('title').trim().notEmpty().withMessage('Title is required').isLength({ max: 200 }),
+  body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 1000 }),
+];
+
+router.post('/send', authenticateAdmin, sendValidation, validate, async (req, res) => {
   try {
     const { userId, type, title, message, data } = req.body;
-    if (!userId || !type || !title || !message) {
-      return res.status(400).json({ success: false, message: 'userId, type, title, and message are required' });
-    }
     const notification = await Notification.create({
       userId,
       type,
@@ -97,7 +120,7 @@ router.post('/send', authenticateAdmin, async (req, res) => {
     });
     res.status(201).json({ success: true, data: notification });
   } catch (error) {
-    badRequest(res, error);
+    serverError(res, error);
   }
 });
 

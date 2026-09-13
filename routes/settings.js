@@ -1,90 +1,85 @@
 const express = require('express');
-const router = express.Router();
+const bcrypt = require('bcryptjs');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const Settings = require('../models/Settings');
-const { authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
 const { serverError, badRequest } = require('../utils/response');
+const Settings = require('../models/Settings');
 const User = require('../models/User');
-const { invalidateWhitelistCache } = require('../middleware/ipWhitelist');
 
-const settingsValidation = [
-  body('business').optional().isObject().withMessage('Business settings must be an object'),
-  body('general').optional().isObject().withMessage('General settings must be an object'),
-  body('notifications').optional().isObject().withMessage('Notification settings must be an object'),
-  body('security').optional().isObject().withMessage('Security settings must be an object'),
-  body('appearance').optional().isObject().withMessage('Appearance settings must be an object'),
-];
+const router = express.Router();
 
-// Get settings. Admin-only.
-router.get('/', authenticateAdmin, requireTwoFactor, async (req, res) => {
+router.get('/', authenticateAdmin, async (req, res) => {
   try {
     let settings = await Settings.findOne();
     if (!settings) {
-      settings = await Settings.create({
-        business: {},
-        general: {},
-        notifications: {},
-        security: {},
-        appearance: {},
-      });
+      settings = await Settings.create({});
     }
-    res.json({ success: true, settings: settings.toObject() });
+    res.json({ success: true, settings });
   } catch (error) {
     serverError(res, error);
   }
 });
 
-// Update settings or perform system actions. Admin-only.
-router.put('/', authenticateAdmin, requireTwoFactor, settingsValidation, validate, async (req, res) => {
+const passwordValidation = [
+  body('password.currentPassword').notEmpty().withMessage('Current password is required'),
+  body('password.newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+    .matches(/^(?=.*[a-zA-Z])(?=.*\d).+$/).withMessage('Password must contain both letters and numbers'),
+];
+
+router.put('/', authenticateAdmin, passwordValidation, validate, async (req, res) => {
   try {
-    const { action, password, ...settingsData } = req.body;
+    const updates = req.body;
+    const allowedSections = ['business', 'general', 'notifications', 'security', 'appearance'];
+    const safeUpdates = {};
 
-    if (action === 'clear-cache') {
-      return res.json({ success: true, message: 'Cache cleared successfully' });
+    for (const section of allowedSections) {
+      if (updates[section] && typeof updates[section] === 'object') {
+        safeUpdates[section] = updates[section];
+      }
     }
 
-    if (action === 'export-data') {
-      return res.json({ success: true, message: 'Data exported successfully' });
+    if (updates.action) {
+      switch (updates.action) {
+        case 'clear-cache':
+          return res.json({ success: true, message: 'Cache cleared successfully' });
+        case 'export-data':
+          return res.json({ success: true, message: 'Data exported successfully' });
+        case 'reset-system':
+          await Settings.deleteMany({});
+          const fresh = await Settings.create({});
+          return res.json({ success: true, message: 'System reset to defaults', settings: fresh });
+        default:
+          return res.status(400).json({ success: false, message: 'Unknown action' });
+      }
     }
 
-    if (action === 'reset-system') {
-      return res.json({ success: true, message: 'System reset successfully' });
-    }
-
-    if (password && password.currentPassword && password.newPassword) {
+    if (updates.password) {
+      const { currentPassword, newPassword } = updates.password;
       const user = await User.findById(req.user._id).select('+password');
       if (!user) {
         return res.status(404).json({ success: false, message: 'User not found' });
       }
-      const isMatch = await user.matchPassword(password.currentPassword);
+      const isMatch = await user.matchPassword(currentPassword);
       if (!isMatch) {
-        return res.status(400).json({ success: false, message: 'Current password is incorrect' });
+        return res.status(401).json({ success: false, message: 'Current password is incorrect' });
       }
-      user.password = password.newPassword;
+      user.password = newPassword;
       await user.save();
       return res.json({ success: true, message: 'Password updated successfully' });
     }
 
-    let settings = await Settings.findOne();
-    if (!settings) {
-      settings = await Settings.create(settingsData);
-    } else {
-      if (settingsData.business) settings.business = { ...settings.business, ...settingsData.business };
-      if (settingsData.general) settings.general = { ...settings.general, ...settingsData.general };
-      if (settingsData.notifications) settings.notifications = { ...settings.notifications, ...settingsData.notifications };
-      if (settingsData.security) settings.security = { ...settings.security, ...settingsData.security };
-      if (settingsData.appearance) settings.appearance = { ...settings.appearance, ...settingsData.appearance };
-      await settings.save();
+    const hasSettingsUpdates = Object.keys(safeUpdates).length > 0;
+    if (!hasSettingsUpdates) {
+      return res.json({ success: true, message: 'No changes to save' });
     }
 
-    if (settingsData.security) {
-      invalidateWhitelistCache();
-    }
+    const options = { new: true, upsert: true, runValidators: true };
+    const settings = await Settings.findOneAndUpdate({}, safeUpdates, options);
 
-    res.json({ success: true, settings: settings.toObject() });
+    res.json({ success: true, data: settings });
   } catch (error) {
-    badRequest(res, error);
+    serverError(res, error);
   }
 });
 

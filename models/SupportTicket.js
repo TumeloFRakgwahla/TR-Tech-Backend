@@ -1,63 +1,18 @@
 const mongoose = require('mongoose');
 
-const ticketMessageSchema = new mongoose.Schema({
-  senderId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  senderRole: {
-    type: String,
-    enum: ['customer', 'admin', 'manager', 'staff']
-  },
-  senderName: {
-    type: String,
-    trim: true
-  },
-  message: {
-    type: String,
-    required: [true, 'Message is required'],
-    trim: true,
-    maxlength: [2000, 'Message cannot exceed 2000 characters']
-  },
-  attachments: {
-    type: [String]
-  }
-}, {
-  timestamps: true
+const messageSchema = new mongoose.Schema({
+  senderName: { type: String, required: true, trim: true },
+  senderType: { type: String, enum: ['customer', 'admin'], default: 'customer' },
+  message: { type: String, required: true, trim: true },
+  createdAt: { type: Date, default: Date.now }
 });
 
 const supportTicketSchema = new mongoose.Schema({
-  ticketNumber: {
-    type: String,
-    unique: true,
-    index: true
-  },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    index: true
-  },
-  customerName: {
-    type: String,
-    required: [true, 'Customer name is required'],
-    trim: true
-  },
-  customerEmail: {
-    type: String,
-    required: [true, 'Customer email is required'],
-    trim: true,
-    lowercase: true
-  },
-  customerPhone: {
-    type: String,
-    trim: true
-  },
-  subject: {
-    type: String,
-    required: [true, 'Subject is required'],
-    trim: true,
-    maxlength: [200, 'Subject cannot exceed 200 characters']
-  },
+  ticketNumber: { type: String, required: true, unique: true, index: true },
+  customerName: { type: String, required: true, trim: true },
+  customerEmail: { type: String, required: true, lowercase: true, trim: true },
+  customerPhone: { type: String, trim: true },
+  subject: { type: String, required: true, trim: true },
   category: {
     type: String,
     enum: ['General', 'Order', 'Repair', 'Technical', 'Billing', 'Other'],
@@ -71,38 +26,37 @@ const supportTicketSchema = new mongoose.Schema({
   status: {
     type: String,
     enum: ['Open', 'In Progress', 'Resolved', 'Closed'],
-    default: 'Open',
-    index: true
+    default: 'Open'
   },
-  messages: {
-    type: [ticketMessageSchema],
-    default: []
-  },
+  message: { type: String, required: true },
+  messages: [messageSchema],
+  adminNotes: { type: String, trim: true },
   assignedTo: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  },
-  resolvedAt: {
-    type: Date
-  },
-  closedAt: {
-    type: Date
+    ref: 'User',
+    index: true
   }
 }, {
   timestamps: true,
   indexes: [
-    { key: { userId: 1, createdAt: -1 } },
-    { key: { status: 1, createdAt: -1 } },
-    { key: { ticketNumber: 1 } },
-    { key: { customerEmail: 1 } }
+    { key: { status: 1 } },
+    { key: { priority: 1 } },
+    { key: { category: 1 } },
+    { key: { createdAt: -1 } },
+    { key: { customerEmail: 1, createdAt: -1 } }
   ]
 });
 
-supportTicketSchema.pre('save', async function (next) {
+supportTicketSchema.pre('save', async function(next) {
   if (!this.ticketNumber) {
-    const timestamp = Date.now().toString(36).toUpperCase();
-    const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-    this.ticketNumber = `TK-${timestamp}-${random}`;
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let unique = false;
+    while (!unique) {
+      const suffix = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+      this.ticketNumber = `TK-${suffix}`;
+      const existing = await this.constructor.findOne({ ticketNumber: this.ticketNumber });
+      if (!existing) unique = true;
+    }
   }
   next();
 });

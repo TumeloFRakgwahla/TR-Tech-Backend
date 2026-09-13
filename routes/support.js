@@ -1,151 +1,159 @@
 const express = require('express');
-const { serverError, badRequest, successResponse } = require('../utils/response');
-const { sendPaginated } = require('../utils/pagination');
-const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
-const SupportTicket = require('../models/SupportTicket');
-const { authenticate, authenticateAdmin, optionalAuthenticate } = require('../middleware/auth');
+const { authenticateAdmin } = require('../middleware/auth');
+const { serverError, badRequest } = require('../utils/response');
+const { sendPaginated } = require('../utils/pagination');
+const { toSafeString, escapeRegex } = require('../utils/query');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
+const SupportTicket = require('../models/SupportTicket');
+
+const router = express.Router();
+
+const submitLimiter = createPublicLimiter();
 
 const ticketValidation = [
+  body('customerName').trim().notEmpty().withMessage('Customer name is required').isLength({ max: 200 }).withMessage('Name cannot exceed 200 characters'),
+  body('customerEmail').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
+  body('customerPhone').optional().trim().isLength({ max: 20 }).withMessage('Phone cannot exceed 20 characters'),
   body('subject').trim().notEmpty().withMessage('Subject is required').isLength({ max: 200 }).withMessage('Subject cannot exceed 200 characters'),
-  body('category').optional().isIn(['General', 'Order', 'Repair', 'Technical', 'Billing', 'Other']).withMessage('Invalid category'),
-  body('priority').optional().isIn(['Low', 'Medium', 'High', 'Urgent']).withMessage('Invalid priority'),
+  body('category').optional().trim().isIn(['General', 'Order', 'Repair', 'Technical', 'Billing', 'Other']).withMessage('Invalid category'),
+  body('priority').optional().trim().isIn(['Low', 'Medium', 'High', 'Urgent']).withMessage('Invalid priority'),
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 2000 }).withMessage('Message cannot exceed 2000 characters'),
-  body('customerName').trim().notEmpty().withMessage('Customer name is required'),
-  body('customerEmail').isEmail().withMessage('Valid email is required').normalizeEmail(),
-  body('customerPhone').optional().trim()
 ];
 
-const ticketUpdateValidation = [
-  body('status').optional().isIn(['Open', 'In Progress', 'Resolved', 'Closed']).withMessage('Invalid status'),
-  body('priority').optional().isIn(['Low', 'Medium', 'High', 'Urgent']).withMessage('Invalid priority'),
-  body('category').optional().isIn(['General', 'Order', 'Repair', 'Technical', 'Billing', 'Other']).withMessage('Invalid category'),
-  body('assignedTo').optional().isMongoId().withMessage('Invalid assigned user ID'),
-  body('message').optional().trim().isLength({ max: 2000 }).withMessage('Message cannot exceed 2000 characters')
-];
-
-// Submit a new support ticket. Public endpoint so customers can submit without an account.
-router.post('/', createPublicLimiter, ticketValidation, validate, async (req, res) => {
+router.post('/', submitLimiter, ticketValidation, validate, async (req, res) => {
   try {
-    const { subject, category, priority, message, customerName, customerEmail, customerPhone } = req.body;
-
+    const { customerName, customerEmail, customerPhone, subject, category, priority, message } = req.body;
     const ticket = await SupportTicket.create({
-      subject,
-      category: category || 'General',
-      priority: priority || 'Medium',
       customerName,
       customerEmail,
       customerPhone,
-      messages: [
-        {
-          senderName: customerName,
-          message,
-          senderRole: 'customer'
-        }
-      ]
+      subject,
+      category: category || 'General',
+      priority: priority || 'Medium',
+      message,
+      messages: [{
+        senderName: customerName,
+        senderType: 'customer',
+        message,
+      }],
     });
-
     res.status(201).json({ success: true, data: ticket });
   } catch (error) {
-    badRequest(res, error);
+    serverError(res, error);
   }
 });
 
-// List support tickets. Admin sees all, authenticated customers see only their own.
 router.get('/', authenticateAdmin, async (req, res) => {
   try {
-    const { page = 1, limit = 20, status, category, priority } = req.query;
+    const { page = 1, limit = 20 } = req.query;
+    let query = {};
+
+    const status = toSafeString(req.query.status);
+    if (status) query.status = status;
+
+    const search = toSafeString(req.query.search);
+    if (search) {
+      query.$or = [
+        { ticketNumber: { $regex: escapeRegex(search), $options: 'i' } },
+        { customerName: { $regex: escapeRegex(search), $options: 'i' } },
+        { customerEmail: { $regex: escapeRegex(search), $options: 'i' } },
+        { subject: { $regex: escapeRegex(search), $options: 'i' } },
+      ];
+    }
+
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
     const skip = (pageNum - 1) * limitNum;
-
-    const query = {};
-    if (status) query.status = status;
-    if (category) query.category = category;
-    if (priority) query.priority = priority;
 
     const [tickets, total] = await Promise.all([
       SupportTicket.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
       SupportTicket.countDocuments(query)
     ]);
 
-    sendPaginated(res, tickets, total, pageNum, limitNum);
+    res.json({
+      success: true,
+      tickets,
+      total,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+    });
   } catch (error) {
     serverError(res, error);
   }
 });
 
-// Get a single ticket by ID. Admin can view any ticket; customers can view their own.
-router.get('/:id', optionalAuthenticate, async (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const ticket = await SupportTicket.findById(req.params.id);
+    const id = req.params.id;
+
+    let query = {};
+    if (id.length === 24 && id.match(/^[0-9a-fA-F]{24}$/)) {
+      query._id = id;
+    } else {
+      query.ticketNumber = id.toUpperCase();
+    }
+
+    const ticket = await SupportTicket.findOne(query);
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
     }
 
-    if (req.user && req.user.role !== 'customer') {
-      return res.json({ success: true, data: ticket });
-    }
-
-    if (req.user && ticket.userId && ticket.userId.toString() === req.user._id.toString()) {
-      return res.json({ success: true, data: ticket });
-    }
-
-    return res.status(404).json({ success: false, message: 'Ticket not found' });
+    res.json({ success: true, data: ticket });
   } catch (error) {
     serverError(res, error);
   }
 });
 
-// Update a ticket. Admin-only for status/priority changes; customers can add messages.
-router.put('/:id', optionalAuthenticate, ticketUpdateValidation, validate, async (req, res) => {
+const updateTicketValidation = [
+  body('status').optional().isIn(['Open', 'In Progress', 'Resolved', 'Closed']).withMessage('Invalid status'),
+  body('priority').optional().isIn(['Low', 'Medium', 'High', 'Urgent']).withMessage('Invalid priority'),
+  body('category').optional().trim().isIn(['General', 'Order', 'Repair', 'Technical', 'Billing', 'Other']).withMessage('Invalid category'),
+  body('message').optional().trim().isLength({ max: 2000 }).withMessage('Message cannot exceed 2000 characters'),
+  body('adminNotes').optional().trim(),
+  body('assignedTo').optional().isMongoId().withMessage('Invalid assignedTo ID'),
+];
+
+router.put('/:id', authenticateAdmin, updateTicketValidation, validate, async (req, res) => {
   try {
+    const { status, priority, category, message, adminNotes, assignedTo } = req.body;
     const ticket = await SupportTicket.findById(req.params.id);
+
     if (!ticket) {
       return res.status(404).json({ success: false, message: 'Ticket not found' });
     }
 
-    const isAdmin = req.user && ['admin', 'manager', 'staff'].includes(req.user.role);
-    const isOwner = req.user && ticket.userId && ticket.userId.toString() === req.user._id.toString();
+    if (status !== undefined) ticket.status = status;
+    if (priority !== undefined) ticket.priority = priority;
+    if (category !== undefined) ticket.category = category;
+    if (adminNotes !== undefined) ticket.adminNotes = adminNotes;
+    if (assignedTo !== undefined) ticket.assignedTo = assignedTo;
 
-    if (!isAdmin && !isOwner) {
-      return res.status(403).json({ success: false, message: 'Access denied' });
-    }
-
-    if (isAdmin) {
-      if (req.body.status) {
-        ticket.status = req.body.status;
-        if (req.body.status === 'Resolved' && !ticket.resolvedAt) {
-          ticket.resolvedAt = new Date();
-        }
-        if (req.body.status === 'Closed' && !ticket.closedAt) {
-          ticket.closedAt = new Date();
-        }
-      }
-      if (req.body.priority) ticket.priority = req.body.priority;
-      if (req.body.category) ticket.category = req.body.category;
-      if (req.body.assignedTo) ticket.assignedTo = req.body.assignedTo;
-    }
-
-    if (req.body.message) {
+    if (message) {
+      const ticketObj = ticket.toObject();
+      const lastMessage = ticket.messages.length > 0 ? ticket.messages[ticket.messages.length - 1] : null;
+      const senderName = lastMessage && lastMessage.senderType === 'admin'
+        ? lastMessage.senderName
+        : 'Admin';
       ticket.messages.push({
-        senderId: req.user?._id || null,
-        senderRole: req.user?.role || 'customer',
-        senderName: req.user ? `${req.user.firstName} ${req.user.lastName}` : ticket.customerName,
-        message: req.body.message
+        senderName,
+        senderType: 'admin',
+        message,
       });
+      void ticketObj;
     }
 
     await ticket.save();
     res.json({ success: true, data: ticket });
   } catch (error) {
-    badRequest(res, error);
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid ticket ID' });
+    }
+    serverError(res, error);
   }
 });
 
-// Delete a ticket. Admin-only.
 router.delete('/:id', authenticateAdmin, async (req, res) => {
   try {
     const ticket = await SupportTicket.findByIdAndDelete(req.params.id);
@@ -154,6 +162,9 @@ router.delete('/:id', authenticateAdmin, async (req, res) => {
     }
     res.json({ success: true, message: 'Ticket deleted successfully' });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid ticket ID' });
+    }
     serverError(res, error);
   }
 });

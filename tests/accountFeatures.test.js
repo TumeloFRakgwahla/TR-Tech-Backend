@@ -64,7 +64,7 @@ describe('Account features', () => {
 
   describe('Customer order history', () => {
     it('returns only the authenticated user’s orders', async () => {
-      const user = await User.create({ firstName: 'O', lastName: 'U', email: 'orders@test.com', password: 'password123', phone: '1' });
+      const user = await User.create({ firstName: 'O', lastName: 'U', email: 'orders@test.com', password: 'password123', phone: '1', emailVerified: true });
       const cookie = await loginAndGetCookie('orders@test.com', 'password123');
       const product = await Product.create({ name: 'P', description: 'd', category: 'Smartphones', price: 10, condition: 'New', stock: 5, status: 'Active' });
 
@@ -99,9 +99,86 @@ describe('Account features', () => {
     });
   });
 
+  describe('Email verification gate', () => {
+    it('blocks an unverified authenticated user from creating an order', async () => {
+      const user = await User.create({ firstName: 'G', lastName: 'U', email: 'gate@test.com', password: 'password123', phone: '1', emailVerified: false });
+      const cookie = await loginAndGetCookie('gate@test.com', 'password123');
+      const product = await Product.create({ name: 'G', description: 'd', category: 'Smartphones', price: 10, condition: 'New', stock: 5, status: 'Active' });
+
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Cookie', cookie)
+        .send({
+          items: [{ product: product._id, quantity: 1 }],
+          customer: { name: 'G U', email: 'gate@test.com', phone: '1' },
+          paymentMethod: 'Card',
+        });
+
+      expect(res.statusCode).toEqual(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.requiresEmailVerification).toBe(true);
+    });
+
+    it('allows a verified authenticated user to create an order', async () => {
+      const user = await User.create({ firstName: 'V', lastName: 'U', email: 'vgate@test.com', password: 'password123', phone: '1', emailVerified: true });
+      const cookie = await loginAndGetCookie('vgate@test.com', 'password123');
+      const product = await Product.create({ name: 'V', description: 'd', category: 'Smartphones', price: 10, condition: 'New', stock: 5, status: 'Active' });
+
+      const res = await request(app)
+        .post('/api/v1/orders')
+        .set('Cookie', cookie)
+        .send({
+          items: [{ product: product._id, quantity: 1 }],
+          customer: { name: 'V U', email: 'vgate@test.com', phone: '1' },
+          paymentMethod: 'Card',
+        });
+
+      expect(res.statusCode).toEqual(201);
+      expect(res.body.success).toBe(true);
+    });
+
+    it('blocks an unverified authenticated user from payment methods', async () => {
+      await User.create({ firstName: 'U', lastName: 'B', email: 'gpay@test.com', password: 'password123', phone: '1', emailVerified: false });
+      const cookie = await loginAndGetCookie('gpay@test.com', 'password123');
+
+      const res = await request(app)
+        .get('/api/v1/payment-methods')
+        .set('Cookie', cookie);
+
+      expect(res.statusCode).toEqual(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.requiresEmailVerification).toBe(true);
+    });
+
+    it('blocks an unverified authenticated user from account profile', async () => {
+      await User.create({ firstName: 'U', lastName: 'A', email: 'gacc@test.com', password: 'password123', phone: '1', emailVerified: false });
+      const cookie = await loginAndGetCookie('gacc@test.com', 'password123');
+
+      const res = await request(app)
+        .get('/api/v1/account/profile')
+        .set('Cookie', cookie);
+
+      expect(res.statusCode).toEqual(403);
+      expect(res.body.success).toBe(false);
+      expect(res.body.requiresEmailVerification).toBe(true);
+    });
+
+    it('allows a verified authenticated user to access account profile', async () => {
+      await User.create({ firstName: 'V', lastName: 'A', email: 'vacc@test.com', password: 'password123', phone: '1', emailVerified: true });
+      const cookie = await loginAndGetCookie('vacc@test.com', 'password123');
+
+      const res = await request(app)
+        .get('/api/v1/account/profile')
+        .set('Cookie', cookie);
+
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.success).toBe(true);
+    });
+  });
+
   describe('Saved payment methods (PCI tokenization)', () => {
     it('stores only tokenized metadata, never raw card data', async () => {
-      const user = await User.create({ firstName: 'P', lastName: 'M', email: 'pay@test.com', password: 'password123', phone: '1' });
+      const user = await User.create({ firstName: 'P', lastName: 'M', email: 'pay@test.com', password: 'password123', phone: '1', emailVerified: true });
       const cookie = await loginAndGetCookie('pay@test.com', 'password123');
 
       const add = await request(app)
@@ -119,7 +196,7 @@ describe('Account features', () => {
       expect(list.body.data.length).toBe(1);
 
       // A different user cannot see or delete the first user's method.
-      const other = await User.create({ firstName: 'P2', lastName: 'M2', email: 'pay2@test.com', password: 'password123', phone: '1' });
+      const other = await User.create({ firstName: 'P2', lastName: 'M2', email: 'pay2@test.com', password: 'password123', phone: '1', emailVerified: true });
       const otherCookie = await loginAndGetCookie('pay2@test.com', 'password123');
       const otherList = await request(app).get('/api/v1/payment-methods').set('Cookie', otherCookie);
       expect(otherList.body.data.length).toBe(0);
@@ -136,7 +213,7 @@ describe('Account features', () => {
     });
 
     it('rejects an invalid gateway', async () => {
-      const user = await User.create({ firstName: 'P3', lastName: 'M3', email: 'pay3@test.com', password: 'password123', phone: '1' });
+      const user = await User.create({ firstName: 'P3', lastName: 'M3', email: 'pay3@test.com', password: 'password123', phone: '1', emailVerified: true });
       const cookie = await loginAndGetCookie('pay3@test.com', 'password123');
       const res = await request(app)
         .post('/api/v1/payment-methods')

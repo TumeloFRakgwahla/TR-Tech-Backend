@@ -10,7 +10,7 @@ const Repair = require('../models/Repair');
 const Notification = require('../models/Notification');
 const Coupon = require('../models/Coupon');
 const { toSafeString } = require('../utils/query');
-const { authenticateAdmin, optionalAuthenticate, requireTwoFactor } = require('../middleware/auth');
+const { authenticateAdmin, optionalAuthenticate, requireEmailVerified } = require('../middleware/auth');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
 const {
   createOrder,
@@ -222,7 +222,7 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 
 // Create a new order. Public endpoint (optional auth for user tracking).
 // Stock is deducted atomically in orderService.createOrder.
-router.post('/', optionalAuthenticate, orderItemValidation, validate, async (req, res) => {
+router.post('/', optionalAuthenticate, requireEmailVerified, orderItemValidation, validate, async (req, res) => {
   try {
     const { items, customer, paymentMethod, notes, coupon, totalAmount } = req.body;
     let computedTotal = 0;

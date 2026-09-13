@@ -88,6 +88,36 @@ router.get('/', async (req, res) => {
   } catch (error) {
     serverError(res, error);
   }
+  });
+
+// Get unique product categories. Admin-only.
+router.get('/categories/unique', authenticateAdmin, async (req, res) => {
+  try {
+    const categories = await Product.aggregate([
+      { $match: { category: { $exists: true, $ne: '' } } },
+      { $group: { _id: '$category' } },
+      { $project: { _id: 0, category: '$_id' } },
+      { $sort: { category: 1 } },
+    ]);
+    res.json({ success: true, data: categories, count: categories.length });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
+// Get unique product brands. Admin-only.
+router.get('/brands/unique', authenticateAdmin, async (req, res) => {
+  try {
+    const brands = await Product.aggregate([
+      { $match: { brand: { $exists: true, $ne: '' } } },
+      { $group: { _id: '$brand' } },
+      { $project: { _id: 0, brand: '$_id' } },
+      { $sort: { brand: 1 } },
+    ]);
+    res.json({ success: true, data: brands, count: brands.length });
+  } catch (error) {
+    serverError(res, error);
+  }
 });
 
 // Get a single product by ID. Public endpoint for product detail pages.

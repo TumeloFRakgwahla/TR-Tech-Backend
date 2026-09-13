@@ -7,7 +7,7 @@ const Address = require('../models/Address');
 const Notification = require('../models/Notification');
 const Session = require('../models/Session');
 const User = require('../models/User');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireEmailVerified } = require('../middleware/auth');
 
 const addressValidation = [
   body('label').optional().isIn(['Home', 'Work', 'Other']).withMessage('Invalid label'),
@@ -19,7 +19,7 @@ const addressValidation = [
 ];
 
 // Get the authenticated user's profile data.
-router.get('/profile', authenticate, async (req, res) => {
+router.get('/profile', authenticate, requireEmailVerified, async (req, res) => {
   try {
     res.json({
       success: true,
@@ -39,7 +39,7 @@ router.get('/profile', authenticate, async (req, res) => {
 });
 
 // Update the authenticated user's profile (name, phone).
-router.put('/profile', authenticate, [
+router.put('/profile', authenticate, requireEmailVerified, [
   body('firstName').optional().trim().notEmpty().withMessage('First name cannot be empty').isLength({ max: 50 }).withMessage('First name cannot exceed 50 characters'),
   body('lastName').optional().trim().notEmpty().withMessage('Last name cannot be empty').isLength({ max: 50 }).withMessage('Last name cannot exceed 50 characters'),
   body('phone').optional().trim().notEmpty().withMessage('Phone number cannot be empty')
@@ -72,7 +72,7 @@ router.put('/profile', authenticate, [
 
 // Change the user's password. Requires the current password for verification.
 // After a successful change, all other active sessions are revoked for security.
-router.put('/password', authenticate, [
+router.put('/password', authenticate, requireEmailVerified, [
   body('currentPassword').notEmpty().withMessage('Current password is required'),
   body('newPassword')
     .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
@@ -105,7 +105,7 @@ router.put('/password', authenticate, [
 
 // Addresses
 // Get all addresses for the authenticated user, sorted by default first.
-router.get('/addresses', authenticate, async (req, res) => {
+router.get('/addresses', authenticate, requireEmailVerified, async (req, res) => {
   try {
     const addresses = await Address.find({ userId: req.user._id }).sort({ isDefault: -1, createdAt: -1 });
     res.json({ success: true, data: addresses });
@@ -115,7 +115,7 @@ router.get('/addresses', authenticate, async (req, res) => {
 });
 
 // Create a new address for the authenticated user.
-router.post('/addresses', authenticate, addressValidation, validate, async (req, res) => {
+router.post('/addresses', authenticate, requireEmailVerified, addressValidation, validate, async (req, res) => {
   try {
     const addressData = {
       ...req.body,
@@ -130,7 +130,7 @@ router.post('/addresses', authenticate, addressValidation, validate, async (req,
 });
 
 // Update an existing address. Ensures the address belongs to the authenticated user.
-router.put('/addresses/:id', authenticate, addressValidation, validate, async (req, res) => {
+router.put('/addresses/:id', authenticate, requireEmailVerified, addressValidation, validate, async (req, res) => {
   try {
     const address = await Address.findOne({ _id: req.params.id, userId: req.user._id });
     if (!address) {
@@ -148,7 +148,7 @@ router.put('/addresses/:id', authenticate, addressValidation, validate, async (r
 });
 
 // Delete an address. Ensures the address belongs to the authenticated user.
-router.delete('/addresses/:id', authenticate, async (req, res) => {
+router.delete('/addresses/:id', authenticate, requireEmailVerified, async (req, res) => {
   try {
     const address = await Address.findOne({ _id: req.params.id, userId: req.user._id });
     if (!address) {
@@ -164,7 +164,7 @@ router.delete('/addresses/:id', authenticate, async (req, res) => {
 
 // Set an address as the default for the user.
 // Clears the default flag from all other addresses first.
-router.post('/addresses/:id/default', authenticate, async (req, res) => {
+router.post('/addresses/:id/default', authenticate, requireEmailVerified, async (req, res) => {
   try {
     const address = await Address.findOne({ _id: req.params.id, userId: req.user._id });
     if (!address) {
@@ -183,7 +183,7 @@ router.post('/addresses/:id/default', authenticate, async (req, res) => {
 
 // Notifications
 // Get notification preferences and unread count for the authenticated user.
-router.get('/notifications', authenticate, async (req, res) => {
+router.get('/notifications', authenticate, requireEmailVerified, async (req, res) => {
   try {
     const preferences = req.user.notificationPreferences || {
       emailOrderUpdates: true,
@@ -214,7 +214,7 @@ router.get('/notifications', authenticate, async (req, res) => {
 });
 
 // Update notification preferences for the authenticated user.
-router.put('/notifications', authenticate, [
+router.put('/notifications', authenticate, requireEmailVerified, [
   body('emailOrderUpdates').optional().isBoolean(),
   body('emailPromotions').optional().isBoolean(),
   body('emailNewsletter').optional().isBoolean(),
@@ -249,7 +249,7 @@ router.put('/notifications', authenticate, [
 
 // Sessions
 // List all active sessions for the authenticated user.
-router.get('/sessions', authenticate, async (req, res) => {
+router.get('/sessions', authenticate, requireEmailVerified, async (req, res) => {
   try {
     const sessions = await Session.find({ userId: req.user._id, isActive: true })
       .sort({ lastActive: -1 });
@@ -260,7 +260,7 @@ router.get('/sessions', authenticate, async (req, res) => {
 });
 
 // Revoke a specific session by ID. Ensures the session belongs to the authenticated user.
-router.delete('/sessions/:id', authenticate, async (req, res) => {
+router.delete('/sessions/:id', authenticate, requireEmailVerified, async (req, res) => {
   try {
     const session = await Session.findOne({ _id: req.params.id, userId: req.user._id });
     if (!session) {

@@ -123,42 +123,19 @@ const authenticateAdmin = async (req, res, next, allowedRoles = ['admin', 'manag
   }
 };
 
-// authorizeAdmin: role-based access control factory for admin routes.
-// Usage: authorizeAdmin('admin', 'manager') — allows only users with one of the specified roles.
-const authorizeAdmin = (...allowedRoles) => {
-  return (req, res, next) => {
-    if (!req.user) {
-      return res.status(401).json({ success: false, message: 'Access denied. Not authenticated.' });
-    }
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({ success: false, message: 'Access denied. Insufficient permissions.' });
-    }
-    next();
-  };
+// requireEmailVerified: middleware that blocks authenticated users whose email
+// is not yet verified. Returns 403 with a machine-readable flag so the client
+// can prompt re-verification. Unauthenticated requests pass through (caller
+// should chain after authenticate/optionalAuthenticate).
+const requireEmailVerified = (req, res, next) => {
+  if (req.user && !req.user.emailVerified) {
+    return res.status(403).json({
+      success: false,
+      message: 'Please verify your email address to continue.',
+      requiresEmailVerification: true,
+    });
+  }
+  next();
 };
 
-const requireTwoFactor = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ success: false, message: 'Access denied. Not authenticated.' });
-  }
-  if (!req.user.twoFactorEnabled) {
-    return next();
-  }
-  if (req.twoFactorVerified) {
-    return next();
-  }
-  return res.status(401).json({
-    success: false,
-    message: 'Two-factor authentication required.',
-    requiresTwoFactor: true
-  });
-};
-
-module.exports = {
-  authenticate,
-  authenticateAdmin,
-  authorizeAdmin,
-  authorize,
-  optionalAuthenticate,
-  requireTwoFactor
-};
+module.exports = { authenticate, authenticateAdmin, authorize, optionalAuthenticate, requireEmailVerified };
