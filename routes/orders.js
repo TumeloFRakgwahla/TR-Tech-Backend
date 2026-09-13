@@ -10,7 +10,7 @@ const Repair = require('../models/Repair');
 const Notification = require('../models/Notification');
 const Coupon = require('../models/Coupon');
 const { toSafeString } = require('../utils/query');
-const { authenticateAdmin, optionalAuthenticate, requireEmailVerified } = require('../middleware/auth');
+const { authenticateAdmin, optionalAuthenticate, requireEmailVerified, requireTwoFactor } = require('../middleware/auth');
 const { createPublicLimiter } = require('../middleware/rateLimiter');
 const {
   createOrder,
