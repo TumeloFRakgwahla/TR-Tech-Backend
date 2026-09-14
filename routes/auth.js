@@ -262,7 +262,7 @@ router.post('/admin/login', authLimiter, [
 
     if (captchaId && captchaCode) {
       const stored = captchaStore.get(captchaId);
-      if (!stored || Date.now() - stored.createdAt > CAPTCHA_TTL_MS) {
+      if (!stored || Date.now() - stored.createdAt > CAPTCHA_TTL) {
         return res.status(400).json({
           success: false,
           message: 'CAPTCHA expired. Please try again.',
@@ -484,45 +484,7 @@ router.post('/resend-verification', [
   }
 });
 
-// Admin login route. Requires role === 'admin'.
-router.post('/admin/login', authLimiter, [
-  body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
-  body('password').notEmpty().withMessage('Password is required'),
-  body('captchaId').optional().isString(),
-  body('captchaCode').optional().isString(),
-], validate, async (req, res) => {
-  try {
-    const { email, password, captchaId, captchaCode } = req.body;
 
-    if (captchaId && captchaCode) {
-      const stored = captchaStore.get(captchaId);
-      if (!stored || stored.expires < Date.now()) {
-        captchaStore.delete(captchaId);
-        return res.status(400).json({ success: false, message: 'Captcha has expired. Please try again.' });
-      }
-      if (stored.code !== captchaCode.toUpperCase()) {
-        captchaStore.delete(captchaId);
-        return res.status(400).json({ success: false, message: 'Invalid captcha code' });
-      }
-      captchaStore.delete(captchaId);
-    }
-
-    const user = await User.findOne({ email }).select('+password');
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    user.password = newPassword;
-    await user.save();
-    await Session.updateMany({ userId: user._id }, { isActive: false });
-
-    const emailData = generatePasswordResetEmail(`${user.firstName} ${user.lastName}`, 'Your password has been reset by an administrator.');
-    await sendEmail(user.email, emailData);
-
-    res.json({ success: true, message: 'Password reset successfully' });
-  } catch (error) {
-    serverError(res, error);
-  }
-});
 
 // Request a password reset link. Always returns success to prevent user enumeration.
 router.post('/forgot-password', [
