@@ -138,65 +138,8 @@ router.get('/promotions', async (req, res) => {
   }
 });
 
-// Public endpoint: validate a coupon code for a given cart total and optional product/category filters.
-router.get('/coupons/validate', async (req, res) => {
-  try {
-    const { code, cartTotal, products, categories } = req.query;
-    if (!code) {
-      return res.status(400).json({ success: false, message: 'Coupon code is required' });
-    }
-
-    const coupon = await Coupon.findOne({ code: code.toUpperCase(), status: 'Active' });
-    if (!coupon) {
-      return res.status(404).json({ success: false, message: 'Invalid or expired coupon code' });
-    }
-
-    if (coupon.expires && new Date() > new Date(coupon.expires)) {
-      return res.status(400).json({ success: false, message: 'This coupon has expired' });
-    }
-
-    const total = parseFloat(cartTotal);
-    if (isNaN(total)) {
-      return res.status(400).json({ success: false, message: 'Invalid cart total' });
-    }
-    if (total < coupon.minOrder) {
-      return res.status(400).json({ success: false, message: `Minimum order of R${coupon.minOrder} required` });
-    }
-
-    if (coupon.products && coupon.products.length > 0) {
-      const productIds = Array.isArray(products) ? products : [];
-      const hasMatchingProduct = coupon.products.some(p => productIds.includes(String(p)));
-      if (!hasMatchingProduct) {
-        return res.status(400).json({ success: false, message: 'This coupon is not valid for the items in your cart' });
-      }
-    }
-
-    if (coupon.categories && coupon.categories.length > 0) {
-      const cartCategories = Array.isArray(categories) ? categories : [];
-      const hasMatchingCategory = coupon.categories.some(c => cartCategories.includes(c));
-      if (!hasMatchingCategory) {
-        return res.status(400).json({ success: false, message: 'This coupon is not valid for the categories in your cart' });
-      }
-    }
-
-    res.json({
-      success: true,
-      data: {
-        code: coupon.code,
-        discount: coupon.discount,
-        type: coupon.type,
-        minOrder: coupon.minOrder,
-      },
-    });
-  } catch (error) {
-    serverError(res, error);
-  }
-});
-
 // All routes below this middleware require admin authentication and 2FA if enabled.
 router.use(authenticateAdmin, requireTwoFactor);
-// All routes below this middleware require admin authentication.
-router.use(authenticateAdmin);
 
 // Create a coupon. Admin-only.
 router.post('/coupons', [
