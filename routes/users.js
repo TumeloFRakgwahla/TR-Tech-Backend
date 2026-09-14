@@ -71,6 +71,61 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
+// Get all roles with their permissions. Admin-only.
+router.get('/roles', authenticateAdmin, async (req, res) => {
+  try {
+    const roles = Object.entries(DEFAULT_ROLE_PERMISSIONS).map(([id, permissions]) => ({
+      id,
+      name: id.charAt(0).toUpperCase() + id.slice(1),
+      permissions,
+    }));
+    res.json({ success: true, data: roles });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
+// Get activity logs. Admin-only.
+router.get('/activity-logs', authenticateAdmin, async (req, res) => {
+  try {
+    const { page = 1, limit = 50, action, userRole, statusCode, userId, startDate, endDate } = req.query;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = (pageNum - 1) * limitNum;
+
+    const query = {};
+    if (action) query.action = action;
+    if (userRole) query.userRole = userRole;
+    if (statusCode) query.statusCode = parseInt(statusCode, 10);
+    if (userId) query.userId = userId;
+
+    if (startDate || endDate) {
+      query.createdAt = {};
+      if (startDate) query.createdAt.$gte = new Date(startDate);
+      if (endDate) query.createdAt.$lte = new Date(endDate);
+    }
+
+    const [logs, total] = await Promise.all([
+      ActivityLog.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
+      ActivityLog.countDocuments(query)
+    ]);
+
+    sendPaginated(res, logs, total, pageNum, limitNum);
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
+// Get all admin users. Admin-only.
+router.get('/admins', authenticateAdmin, async (req, res) => {
+  try {
+    const admins = await User.find({ role: { $in: ['admin', 'manager', 'staff'] } }).select('-password').sort({ createdAt: -1 });
+    res.json({ success: true, data: admins });
+  } catch (error) {
+    serverError(res, error);
+  }
+});
+
 // Get a single user by ID. Admin-only. Password field is excluded.
 router.get('/:id', authenticateAdmin, async (req, res) => {
   try {
@@ -143,20 +198,6 @@ router.delete('/:id', authenticateAdmin, requireTwoFactor, async (req, res) => {
   }
 });
 
-// Get all roles with their permissions. Admin-only.
-router.get('/roles', authenticateAdmin, async (req, res) => {
-  try {
-    const roles = Object.entries(DEFAULT_ROLE_PERMISSIONS).map(([id, permissions]) => ({
-      id,
-      name: id.charAt(0).toUpperCase() + id.slice(1),
-      permissions,
-    }));
-    res.json({ success: true, data: roles });
-  } catch (error) {
-    serverError(res, error);
-  }
-});
-
 // Create a new role. Admin-only.
 router.post('/roles', authenticateAdmin, roleValidation, validate, async (req, res) => {
   try {
@@ -199,47 +240,6 @@ router.delete('/roles/:id', authenticateAdmin, async (req, res) => {
     }
     delete DEFAULT_ROLE_PERMISSIONS[roleId];
     res.json({ success: true, message: 'Role deleted successfully' });
-  } catch (error) {
-    serverError(res, error);
-  }
-});
-
-// Get activity logs. Admin-only.
-router.get('/activity-logs', authenticateAdmin, async (req, res) => {
-  try {
-    const { page = 1, limit = 50, action, userRole, statusCode, userId, startDate, endDate } = req.query;
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 50));
-    const skip = (pageNum - 1) * limitNum;
-
-    const query = {};
-    if (action) query.action = action;
-    if (userRole) query.userRole = userRole;
-    if (statusCode) query.statusCode = parseInt(statusCode, 10);
-    if (userId) query.userId = userId;
-
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
-    }
-
-    const [logs, total] = await Promise.all([
-      ActivityLog.find(query).sort({ createdAt: -1 }).skip(skip).limit(limitNum),
-      ActivityLog.countDocuments(query)
-    ]);
-
-    sendPaginated(res, logs, total, pageNum, limitNum);
-  } catch (error) {
-    serverError(res, error);
-  }
-});
-
-// Get all admin users. Admin-only.
-router.get('/admins', authenticateAdmin, async (req, res) => {
-  try {
-    const admins = await User.find({ role: { $in: ['admin', 'manager', 'staff'] } }).select('-password').sort({ createdAt: -1 });
-    res.json({ success: true, data: admins });
   } catch (error) {
     serverError(res, error);
   }
