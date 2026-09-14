@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticateAdmin } = require('../middleware/auth');
@@ -22,10 +23,24 @@ const ticketValidation = [
   body('message').trim().notEmpty().withMessage('Message is required').isLength({ max: 2000 }).withMessage('Message cannot exceed 2000 characters'),
 ];
 
+const generateTicketNumber = async () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let unique = false;
+  while (!unique) {
+    const suffix = Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    const ticketNumber = `TK-${suffix}`;
+    const existing = await SupportTicket.findOne({ ticketNumber });
+    if (!existing) return ticketNumber;
+  }
+  return `TK-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+};
+
 router.post('/', submitLimiter, ticketValidation, validate, async (req, res) => {
   try {
     const { customerName, customerEmail, customerPhone, subject, category, priority, message } = req.body;
+    const ticketNumber = await generateTicketNumber();
     const ticket = await SupportTicket.create({
+      ticketNumber,
       customerName,
       customerEmail,
       customerPhone,

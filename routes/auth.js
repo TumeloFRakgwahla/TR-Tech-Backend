@@ -7,9 +7,11 @@ const { verifyToken } = require('../utils/jwt');
 const { issueSession, revokeSession, isSessionActive } = require('../utils/session');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
+const Session = require('../models/Session');
 const { authenticate, authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/mail');
+const { serverError } = require('../utils/response');
 
 const router = express.Router();
 
@@ -263,14 +265,14 @@ router.post('/admin/login', authLimiter, [
 
     if (captchaId && captchaCode) {
       const stored = captchaStore.get(captchaId);
-      if (!stored || Date.now() - stored.createdAt > CAPTCHA_TTL) {
+      if (!stored || Date.now() > stored.expires) {
         return res.status(400).json({
           success: false,
           message: 'CAPTCHA expired. Please try again.',
           requiresCaptcha: true
         });
       }
-      if (stored.solution !== captchaCode.toUpperCase()) {
+      if (stored.code !== captchaCode.toUpperCase()) {
         return res.status(400).json({
           success: false,
           message: 'Invalid CAPTCHA. Please try again.',
@@ -553,6 +555,22 @@ router.get('/admin/me', authenticateAdmin, async (req, res) => {
       role: req.user.role
     }
   });
+});
+
+// Get 2FA status for the authenticated admin.
+router.get('/admin/2fa/status', authenticateAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('+twoFactorSecret +twoFactorBackupCodes');
+    res.json({
+      success: true,
+      data: {
+        twoFactorEnabled: user.twoFactorEnabled,
+        twoFactorConfirmedAt: user.twoFactorConfirmedAt
+      }
+    });
+  } catch (error) {
+    serverError(res, error);
+  }
 });
 
 // Logout the current admin by revoking the session and clearing cookies.

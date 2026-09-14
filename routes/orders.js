@@ -34,7 +34,8 @@ const orderItemValidation = [
 
 const orderUpdateValidation = [
   body('status').optional().isIn(['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Completed', 'Cancelled']).withMessage('Invalid status'),
-  body('paymentStatus').optional().isIn(['Pending', 'Paid', 'Refunded']).withMessage('Invalid payment status')
+  body('paymentStatus').optional().isIn(['Pending', 'Paid', 'Refunded']).withMessage('Invalid payment status'),
+  body('notes').optional().isLength({ max: 500 }).withMessage('Notes cannot exceed 500 characters')
 ];
 
 // Aggregation pipeline for order statistics.
@@ -198,7 +199,26 @@ router.get('/track', trackLimiter, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    res.json({ success: true, data: order });
+    res.json({
+      success: true,
+      data: {
+        _id: order._id,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        customerName: order.customer.name,
+        customerPhone: order.customer.phone,
+        items: order.items.map(item => ({
+          name: item.name,
+          condition: item.condition,
+          price: item.price,
+          quantity: item.quantity,
+        })),
+      },
+    });
   } catch (error) {
     if (error.name === 'CastError') {
       return res.status(400).json({ success: false, message: 'Invalid order ID format' });

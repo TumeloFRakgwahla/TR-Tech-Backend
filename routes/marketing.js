@@ -52,7 +52,6 @@ router.get('/coupons/validate', validateCouponQuery, validate, async (req, res) 
       success: true,
       data: {
         code: coupon.code,
-        discount: coupon.discount,
         type: coupon.type,
         minOrder: coupon.minOrder,
         expires: coupon.expires,
@@ -147,6 +146,7 @@ router.post('/coupons', [
   body('discount').isFloat({ min: 0 }).withMessage('Discount must be a non-negative number'),
   body('type').optional().isIn(['Percentage', 'Fixed']),
   body('minOrder').optional().isFloat({ min: 0 }),
+  body('expires').optional().isISO8601().withMessage('Invalid expiry date'),
   body('products').optional().isArray().withMessage('Products must be an array'),
   body('categories').optional().isArray().withMessage('Categories must be an array'),
 ], validate, async (req, res) => {
@@ -176,6 +176,7 @@ router.put('/coupons/:id', [
   body('discount').optional().isFloat({ min: 0 }).withMessage('Discount must be a non-negative number'),
   body('type').optional().isIn(['Percentage', 'Fixed']),
   body('minOrder').optional().isFloat({ min: 0 }),
+  body('expires').optional().isISO8601().withMessage('Invalid expiry date'),
   body('status').optional().isIn(['Active', 'Inactive']),
   body('products').optional().isArray().withMessage('Products must be an array'),
   body('categories').optional().isArray().withMessage('Categories must be an array'),
