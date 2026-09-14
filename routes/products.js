@@ -34,7 +34,7 @@ const sanitizeProductUrls = (product) => {
 
 const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
-  body('sku').trim().notEmpty().withMessage('SKU is required').isLength({ max: 50 }).withMessage('SKU cannot exceed 50 characters'),
+  body('sku').optional().trim().notEmpty().withMessage('SKU cannot be empty').isLength({ max: 50 }).withMessage('SKU cannot exceed 50 characters'),
   body('description').trim().notEmpty().withMessage('Product description is required').isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
   body('category').trim().notEmpty().withMessage('Category is required'),
   body('brand').trim().notEmpty().withMessage('Brand is required'),
