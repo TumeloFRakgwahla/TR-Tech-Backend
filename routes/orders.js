@@ -253,8 +253,17 @@ router.post('/', optionalAuthenticate, requireEmailVerified, orderItemValidation
         }
       }
 
+      // Fetch product prices from DB for accurate coupon validation (prevents client manipulation)
+      const dbProducts = await Product.find({ _id: { $in: productIds } });
+      const priceMap = new Map(dbProducts.map(p => [String(p._id), p.price]));
+
       for (const item of items) {
-        computedTotal += (item.price || 0) * (item.quantity || 0);
+        const productId = typeof item.product === 'object' ? item.product._id || item.product : item.product;
+        const dbPrice = priceMap.get(String(productId));
+        if (dbPrice === undefined) {
+          return res.status(400).json({ success: false, message: `Product not found: ${productId}` });
+        }
+        computedTotal += dbPrice * (item.quantity || 0);
       }
       if (computedTotal < couponDoc.minOrder) {
         return res.status(400).json({ success: false, message: `Minimum order of R${couponDoc.minOrder} required` });
