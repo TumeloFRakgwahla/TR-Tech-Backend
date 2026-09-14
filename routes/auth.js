@@ -6,9 +6,10 @@ const validate = require('../middleware/validate');
 const { verifyToken } = require('../utils/jwt');
 const { issueSession, revokeSession, isSessionActive } = require('../utils/session');
 const User = require('../models/User');
+const Settings = require('../models/Settings');
 const { authenticate, authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');
-const { sendVerificationEmail } = require('../utils/mail');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/mail');
 
 const router = express.Router();
 
@@ -453,9 +454,6 @@ router.post('/verify-email', [
     user.emailVerificationExpires = undefined;
     await user.save();
 
-    const emailData = generateVerificationEmail(`${user.firstName} ${user.lastName}`, 'Your email has been verified successfully.');
-    await sendEmail(user.email, emailData);
-
     res.json({ success: true, message: 'Email verified successfully' });
   } catch (error) {
     console.error('Verify email error:', error);
@@ -499,10 +497,9 @@ router.post('/forgot-password', [
     const resetToken = user.generatePasswordResetToken();
     await user.save();
 
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
-    const emailData = generatePasswordResetEmail(`${user.firstName} ${user.lastName}`, resetLink);
-    await sendEmail(user.email, emailData);
+    await sendPasswordResetEmail(user.email, `${user.firstName} ${user.lastName}`, resetToken).catch((err) => {
+      console.error('Failed to send password reset email:', err);
+    });
 
     res.json({ success: true, message: 'If that email exists, a reset link has been sent' });
   } catch (error) {
