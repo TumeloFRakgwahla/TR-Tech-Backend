@@ -5,6 +5,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
+const compression = require('compression');
 const { createAuthLimiter, createApiLimiter, createPublicLimiter } = require('./middleware/rateLimiter');
 const sanitize = require('./middleware/sanitize');
 const requestId = require('./middleware/requestId');
@@ -111,6 +112,7 @@ app.use((req, res, next) => {
 });
 app.use(cookieParser());
 app.use(sanitize);
+app.use(compression());
 
 // Serve local uploads for both development and production.
 // New uploads may go to Vercel Blob (when BLOB_READ_WRITE_TOKEN is set),
