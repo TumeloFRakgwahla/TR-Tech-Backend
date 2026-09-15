@@ -25,6 +25,25 @@ const SENSITIVE_FIELDS = new Set([
   'twoFactorSecret',
 ]);
 
+// Public endpoints that don't need audit logging (GET requests only).
+// Logging these creates unnecessary database writes on every page load.
+const PUBLIC_GET_PATTERNS = [
+  /^\/products\/?/,
+  /^\/products\/categories\/unique\/?/,
+  /^\/products\/brands\/unique\/?/,
+  /^\/categories\/active\/?/,
+  /^\/brands\/active\/?/,
+  /^\/services\/?/,
+  /^\/services\/[^\/]+\/?/,
+  /^\/marketing\/coupons\/?/,
+  /^\/marketing\/campaigns\/?/,
+  /^\/marketing\/promotions\/?/,
+];
+
+function isPublicGetEndpoint(pathname) {
+  return PUBLIC_GET_PATTERNS.some((re) => re.test(pathname));
+}
+
 function sanitizeBody(body) {
   if (!body || typeof body !== 'object') return body;
   const sanitized = { ...body };
@@ -63,6 +82,11 @@ const logActivity = async (req, res, next) => {
     const endpoint = req.originalUrl || req.url || '';
     const pathname = endpoint.replace(/^\/api\/v1/, '') || endpoint;
 
+    // Skip logging for GET requests to public endpoints to reduce DB writes
+    if (action === 'GET' && isPublicGetEndpoint(pathname)) {
+      return;
+    }
+
     const logEntry = {
       userId,
       userEmail,
@@ -82,8 +106,11 @@ const logActivity = async (req, res, next) => {
       }
     };
 
-    ActivityLog.create(logEntry).catch((err) => {
-      console.error('Failed to create activity log:', err);
+    // Use setImmediate for truly non-blocking async logging
+    setImmediate(() => {
+      ActivityLog.create(logEntry).catch((err) => {
+        console.error('Failed to create activity log:', err);
+      });
     });
   };
 

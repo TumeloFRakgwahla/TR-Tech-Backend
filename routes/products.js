@@ -59,7 +59,7 @@ router.get('/low-stock', authenticateAdmin, async (req, res) => {
 // Public endpoint so the shop page can browse the catalog.
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, sort = 'newest' } = req.query;
     let query = {};
 
     const category = toSafeString(req.query.category);
@@ -82,13 +82,13 @@ router.get('/', async (req, res) => {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-    const { products, total } = await getProducts(query, pageNum, limitNum);
+    const { products, total } = await getProducts(query, pageNum, limitNum, sort);
 
     sendPaginated(res, sanitizeProductUrls(products), total, pageNum, limitNum);
   } catch (error) {
     serverError(res, error);
   }
-  });
+});
 
 // Get a single product by ID. Public endpoint for product detail pages.
 router.get('/:id', async (req, res) => {
