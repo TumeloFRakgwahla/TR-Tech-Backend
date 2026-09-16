@@ -4,11 +4,11 @@ const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { verifyToken } = require('../utils/jwt');
-const { issueSession, revokeSession, isSessionActive } = require('../utils/session');
+const { issueSession, revokeSession } = require('../utils/session');
 const User = require('../models/User');
 const Settings = require('../models/Settings');
 const Session = require('../models/Session');
-const { authenticate, authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
+const { authenticate, authenticateAdmin } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');
 const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/mail');
 const { serverError } = require('../utils/response');
@@ -34,7 +34,6 @@ const generateCaptchaImage = (text) => {
     const x = 20 + i * 30;
     const y = 45;
     const r1 = Math.sin(i * 0.8) * 3;
-    const r2 = Math.cos(i * 0.7) * 3;
     return `<text x="${x}" y="${y}" font-family="monospace" font-size="24" font-weight="bold" fill="rgb(40,40,40)" transform="rotate(${r1} ${x} ${y})">${char}</text>`;
   }).join('');
 

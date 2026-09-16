@@ -34,7 +34,7 @@ const PUBLIC_GET_PATTERNS = [
   /^\/categories\/active\/?/,
   /^\/brands\/active\/?/,
   /^\/services\/?/,
-  /^\/services\/[^\/]+\/?/,
+  /^\/services\/[^/]+\/?/,
   /^\/marketing\/coupons\/?/,
   /^\/marketing\/campaigns\/?/,
   /^\/marketing\/promotions\/?/,

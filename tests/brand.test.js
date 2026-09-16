@@ -1,6 +1,5 @@
 const request = require('supertest');
 const app = require('../app');
-const mongoose = require('mongoose');
 const Product = require('../models/Product');
 
 describe('Product Brand', () => {

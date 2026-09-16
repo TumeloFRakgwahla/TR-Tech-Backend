@@ -10,7 +10,7 @@ const {
   verifyWebhookSignature,
 } = require('../services/paystackService');
 const Order = require('../models/Order');
-const { serverError, badRequest, successResponse } = require('../utils/response');
+const { serverError, successResponse } = require('../utils/response');
 
 const router = express.Router();
 

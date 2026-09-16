@@ -144,9 +144,10 @@ router.get('/:id', authenticateAdmin, async (req, res) => {
 // does not run the pre('save') hook — a plaintext password would be stored as-is.
 router.put('/:id', authenticateAdmin, requireTwoFactor, userValidation, validate, async (req, res) => {
   try {
-    // Strip password from mass-assignment: findByIdAndUpdate does not run the
-    // pre('save') hook, so a plaintext password in the body would be stored as-is.
-    const { password, ...updateData } = req.body;
+     // Strip password from mass-assignment: findByIdAndUpdate does not run the
+     // pre('save') hook, so a plaintext password in the body would be stored as-is.
+     const updateData = { ...req.body };
+     delete updateData.password;
     const user = await User.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
       runValidators: true

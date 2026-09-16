@@ -1,12 +1,11 @@
 const express = require('express');
-const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticate } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');
 const User = require('../models/User');
-const { serverError, badRequest } = require('../utils/response');
+const { serverError } = require('../utils/response');
 
 let OTPAuth;
 try {

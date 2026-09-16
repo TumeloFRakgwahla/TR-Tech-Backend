@@ -14,7 +14,6 @@ jest.mock('../services/paystackService', () => {
 });
 
 const paystackService = require('../services/paystackService');
-const { verifyWebhookSignature } = paystackService;
 
 const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY;
 

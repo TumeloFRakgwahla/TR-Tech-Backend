@@ -1,9 +1,8 @@
 require('dotenv').config();
 
 const { parseEnv } = require('./config/env');
-let env;
 try {
-  env = parseEnv();
+  parseEnv();
 } catch (err) {
   console.error('Failed to load environment configuration:', err);
   if (process.env.VERCEL !== '1') {

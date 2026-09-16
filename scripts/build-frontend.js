@@ -13,12 +13,12 @@ if (!fs.existsSync(frontendPath)) {
 
 console.log('Installing frontend dependencies...');
 try {
-  execSync('npm install', {
+  execSync('npm ci', {
     cwd: frontendPath,
     stdio: 'inherit',
   });
 } catch (error) {
-  console.error('Frontend npm install failed:', error.message);
+  console.error('Frontend npm ci failed:', error.message);
   console.warn('Continuing deployment without frontend build.');
   process.exit(0);
 }

@@ -8,6 +8,7 @@ const validate = require('../middleware/validate');
 const Product = require('../models/Product');
 const { authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { toSafeString, escapeRegex } = require('../utils/query');
+const cache = require('../utils/cache');
 const {
   createProduct,
   getProducts,
@@ -176,8 +177,15 @@ router.delete('/:id', authenticateAdmin, requireTwoFactor, async (req, res) => {
 // Get unique categories from products. Public endpoint for dropdown population.
 router.get('/categories/unique', async (req, res) => {
   try {
+    const cached = cache.get('products:categories:unique');
+    if (cached) {
+      return res.json(cached);
+    }
+
     const categories = await Product.distinct('category', { status: 'Active' });
-    res.json({ success: true, data: categories.sort() });
+    const result = { success: true, data: categories.sort() };
+    cache.set('products:categories:unique', result, 5 * 60 * 1000);
+    res.json(result);
   } catch (error) {
     serverError(res, error);
   }
@@ -186,8 +194,15 @@ router.get('/categories/unique', async (req, res) => {
 // Get unique brands from products. Public endpoint for dropdown population.
 router.get('/brands/unique', async (req, res) => {
   try {
+    const cached = cache.get('products:brands:unique');
+    if (cached) {
+      return res.json(cached);
+    }
+
     const brands = await Product.distinct('brand', { status: 'Active' });
-    res.json({ success: true, data: brands.sort() });
+    const result = { success: true, data: brands.sort() };
+    cache.set('products:brands:unique', result, 5 * 60 * 1000);
+    res.json(result);
   } catch (error) {
     serverError(res, error);
   }
