@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tr-tech-backend
+    ports:
+      - '5000:5000'
+    env_file:
+      - ./.env
+    environment:
+      - NODE_ENV=production
+      - PORT=5000
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - tr-tech-network
+    healthcheck:
+      test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:5000/api/health']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  mongodb:
+    image: mongo:7
+    container_name: tr-tech-mongodb
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongodb-data:/data/db
+    networks:
+      - tr-tech-network
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', 'db.adminCommand("ping")']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mongodb-data:
+
+networks:
+  tr-tech-network:
+    driver: bridge

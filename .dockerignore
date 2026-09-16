@@ -3,9 +3,17 @@ npm-debug.log
 .git
 .gitignore
 .env
+.env.example
 .nyc_output
 coverage
 .vscode
 .idea
 README.md
+Reporte.md
 docker-compose.yml
+tests
+uploads
+.eslintrc.json
+jest.config.js
+Dockerfile
+vercel.json

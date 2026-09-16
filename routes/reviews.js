@@ -1,13 +1,13 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const { serverError, badRequest, successResponse } = require('../utils/response');
+const { serverError, badRequest } = require('../utils/response');
 const { sendPaginated } = require('../utils/pagination');
 const router = express.Router();
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const Review = require('../models/Review');
 const Product = require('../models/Product');
-const { authenticate, authenticateAdmin, optionalAuthenticate } = require('../middleware/auth');
+const { authenticateAdmin, optionalAuthenticate } = require('../middleware/auth');
 
 const reviewValidation = [
   body('rating').isInt({ min: 1, max: 5 }).withMessage('Rating must be between 1 and 5'),

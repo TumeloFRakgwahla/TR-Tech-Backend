@@ -20,12 +20,12 @@ const createAuthLimiter = () => {
 };
 
 // General API limiter: protects all API routes from abuse.
-// 100 requests per 15 minutes per IP.
+// 1000 requests per 15 minutes per IP.
 const createApiLimiter = () => {
   if (isTest) return passthrough();
   return rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 100,
+    max: 1000,
     message: { success: false, message: 'Too many requests. Please try again later.' },
     standardHeaders: true,
     legacyHeaders: false,

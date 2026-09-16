@@ -4,11 +4,14 @@ const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { verifyToken } = require('../utils/jwt');
-const { issueSession, revokeSession, isSessionActive } = require('../utils/session');
+const { issueSession, revokeSession } = require('../utils/session');
 const User = require('../models/User');
-const { authenticate, authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
+const Settings = require('../models/Settings');
+const Session = require('../models/Session');
+const { authenticate, authenticateAdmin } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');
-const { sendVerificationEmail } = require('../utils/mail');
+const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/mail');
+const { serverError } = require('../utils/response');
 
 const router = express.Router();
 
@@ -31,7 +34,6 @@ const generateCaptchaImage = (text) => {
     const x = 20 + i * 30;
     const y = 45;
     const r1 = Math.sin(i * 0.8) * 3;
-    const r2 = Math.cos(i * 0.7) * 3;
     return `<text x="${x}" y="${y}" font-family="monospace" font-size="24" font-weight="bold" fill="rgb(40,40,40)" transform="rotate(${r1} ${x} ${y})">${char}</text>`;
   }).join('');
 
@@ -262,14 +264,14 @@ router.post('/admin/login', authLimiter, [
 
     if (captchaId && captchaCode) {
       const stored = captchaStore.get(captchaId);
-      if (!stored || Date.now() - stored.createdAt > CAPTCHA_TTL_MS) {
+      if (!stored || Date.now() > stored.expires) {
         return res.status(400).json({
           success: false,
           message: 'CAPTCHA expired. Please try again.',
           requiresCaptcha: true
         });
       }
-      if (stored.solution !== captchaCode.toUpperCase()) {
+      if (stored.code !== captchaCode.toUpperCase()) {
         return res.status(400).json({
           success: false,
           message: 'Invalid CAPTCHA. Please try again.',
@@ -453,9 +455,6 @@ router.post('/verify-email', [
     user.emailVerificationExpires = undefined;
     await user.save();
 
-    const emailData = generateVerificationEmail(`${user.firstName} ${user.lastName}`, 'Your email has been verified successfully.');
-    await sendEmail(user.email, emailData);
-
     res.json({ success: true, message: 'Email verified successfully' });
   } catch (error) {
     console.error('Verify email error:', error);
@@ -484,45 +483,7 @@ router.post('/resend-verification', [
   }
 });
 
-// Admin login route. Requires role === 'admin'.
-router.post('/admin/login', authLimiter, [
-  body('email').isEmail().withMessage('Please enter a valid email').normalizeEmail(),
-  body('password').notEmpty().withMessage('Password is required'),
-  body('captchaId').optional().isString(),
-  body('captchaCode').optional().isString(),
-], validate, async (req, res) => {
-  try {
-    const { email, password, captchaId, captchaCode } = req.body;
 
-    if (captchaId && captchaCode) {
-      const stored = captchaStore.get(captchaId);
-      if (!stored || stored.expires < Date.now()) {
-        captchaStore.delete(captchaId);
-        return res.status(400).json({ success: false, message: 'Captcha has expired. Please try again.' });
-      }
-      if (stored.code !== captchaCode.toUpperCase()) {
-        captchaStore.delete(captchaId);
-        return res.status(400).json({ success: false, message: 'Invalid captcha code' });
-      }
-      captchaStore.delete(captchaId);
-    }
-
-    const user = await User.findOne({ email }).select('+password');
-    if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
-    }
-    user.password = newPassword;
-    await user.save();
-    await Session.updateMany({ userId: user._id }, { isActive: false });
-
-    const emailData = generatePasswordResetEmail(`${user.firstName} ${user.lastName}`, 'Your password has been reset by an administrator.');
-    await sendEmail(user.email, emailData);
-
-    res.json({ success: true, message: 'Password reset successfully' });
-  } catch (error) {
-    serverError(res, error);
-  }
-});
 
 // Request a password reset link. Always returns success to prevent user enumeration.
 router.post('/forgot-password', [
@@ -537,10 +498,9 @@ router.post('/forgot-password', [
     const resetToken = user.generatePasswordResetToken();
     await user.save();
 
-    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const resetLink = `${baseUrl}/reset-password?token=${resetToken}`;
-    const emailData = generatePasswordResetEmail(`${user.firstName} ${user.lastName}`, resetLink);
-    await sendEmail(user.email, emailData);
+    await sendPasswordResetEmail(user.email, `${user.firstName} ${user.lastName}`, resetToken).catch((err) => {
+      console.error('Failed to send password reset email:', err);
+    });
 
     res.json({ success: true, message: 'If that email exists, a reset link has been sent' });
   } catch (error) {
@@ -594,6 +554,22 @@ router.get('/admin/me', authenticateAdmin, async (req, res) => {
       role: req.user.role
     }
   });
+});
+
+// Get 2FA status for the authenticated admin.
+router.get('/admin/2fa/status', authenticateAdmin, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('+twoFactorSecret +twoFactorBackupCodes');
+    res.json({
+      success: true,
+      data: {
+        twoFactorEnabled: user.twoFactorEnabled,
+        twoFactorConfirmedAt: user.twoFactorConfirmedAt
+      }
+    });
+  } catch (error) {
+    serverError(res, error);
+  }
 });
 
 // Logout the current admin by revoking the session and clearing cookies.

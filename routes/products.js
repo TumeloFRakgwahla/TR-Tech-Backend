@@ -8,6 +8,7 @@ const validate = require('../middleware/validate');
 const Product = require('../models/Product');
 const { authenticateAdmin, requireTwoFactor } = require('../middleware/auth');
 const { toSafeString, escapeRegex } = require('../utils/query');
+const cache = require('../utils/cache');
 const {
   createProduct,
   getProducts,
@@ -34,7 +35,7 @@ const sanitizeProductUrls = (product) => {
 
 const productValidation = [
   body('name').trim().notEmpty().withMessage('Product name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
-  body('sku').trim().notEmpty().withMessage('SKU is required').isLength({ max: 50 }).withMessage('SKU cannot exceed 50 characters'),
+  body('sku').optional().trim().notEmpty().withMessage('SKU cannot be empty').isLength({ max: 50 }).withMessage('SKU cannot exceed 50 characters'),
   body('description').trim().notEmpty().withMessage('Product description is required').isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
   body('category').trim().notEmpty().withMessage('Category is required'),
   body('brand').trim().notEmpty().withMessage('Brand is required'),
@@ -59,7 +60,7 @@ router.get('/low-stock', authenticateAdmin, async (req, res) => {
 // Public endpoint so the shop page can browse the catalog.
 router.get('/', async (req, res) => {
   try {
-    const { page = 1, limit = 20 } = req.query;
+    const { page = 1, limit = 20, sort = 'newest' } = req.query;
     let query = {};
 
     const category = toSafeString(req.query.category);
@@ -82,39 +83,9 @@ router.get('/', async (req, res) => {
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
 
-    const { products, total } = await getProducts(query, pageNum, limitNum);
+    const { products, total } = await getProducts(query, pageNum, limitNum, sort);
 
     sendPaginated(res, sanitizeProductUrls(products), total, pageNum, limitNum);
-  } catch (error) {
-    serverError(res, error);
-  }
-  });
-
-// Get unique product categories. Admin-only.
-router.get('/categories/unique', authenticateAdmin, async (req, res) => {
-  try {
-    const categories = await Product.aggregate([
-      { $match: { category: { $exists: true, $ne: '' } } },
-      { $group: { _id: '$category' } },
-      { $project: { _id: 0, category: '$_id' } },
-      { $sort: { category: 1 } },
-    ]);
-    res.json({ success: true, data: categories, count: categories.length });
-  } catch (error) {
-    serverError(res, error);
-  }
-});
-
-// Get unique product brands. Admin-only.
-router.get('/brands/unique', authenticateAdmin, async (req, res) => {
-  try {
-    const brands = await Product.aggregate([
-      { $match: { brand: { $exists: true, $ne: '' } } },
-      { $group: { _id: '$brand' } },
-      { $project: { _id: 0, brand: '$_id' } },
-      { $sort: { brand: 1 } },
-    ]);
-    res.json({ success: true, data: brands, count: brands.length });
   } catch (error) {
     serverError(res, error);
   }
@@ -129,6 +100,9 @@ router.get('/:id', async (req, res) => {
     }
     res.json({ success: true, data: sanitizeProductUrls(product) });
   } catch (error) {
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid product ID format' });
+    }
     serverError(res, error);
   }
 });
@@ -149,15 +123,35 @@ router.post('/', authenticateAdmin, requireTwoFactor, productValidation, validat
   }
 });
 
+const partialProductValidation = [
+  body('name').optional().trim().notEmpty().withMessage('Product name is required').isLength({ max: 100 }).withMessage('Name cannot exceed 100 characters'),
+  body('sku').optional().trim().notEmpty().withMessage('SKU cannot be empty').isLength({ max: 50 }).withMessage('SKU cannot exceed 50 characters'),
+  body('description').optional().trim().notEmpty().withMessage('Product description is required').isLength({ max: 500 }).withMessage('Description cannot exceed 500 characters'),
+  body('category').optional().trim().notEmpty().withMessage('Category is required'),
+  body('brand').optional().trim().notEmpty().withMessage('Brand is required'),
+  body('price').optional().isFloat({ min: 0 }).withMessage('Price must be a positive number'),
+  body('condition').optional().trim().notEmpty().withMessage('Condition is required'),
+  body('stock').optional().isInt({ min: 0 }).withMessage('Stock must be a non-negative integer'),
+  body('status').optional().trim().isIn(['Active', 'Inactive', 'Out of Stock']).withMessage('Invalid status')
+];
+
 // Update a product by ID. Admin-only.
-router.put('/:id', authenticateAdmin, requireTwoFactor, productValidation, validate, async (req, res) => {
+router.put('/:id', authenticateAdmin, requireTwoFactor, partialProductValidation, validate, async (req, res) => {
   try {
-    const { name, description, category, brand, price, condition, image, images, stock, status, sku } = req.body;
-    const product = await updateProduct(req.params.id, {
-      name, description, category, brand, price, condition,
-      image: unescapeUrl(image), images: Array.isArray(images) ? images.map(unescapeUrl) : images, stock, status,
-      ...(sku ? { sku } : {}),
-    });
+    const updateData = {};
+    if (req.body.name) updateData.name = req.body.name;
+    if (req.body.description) updateData.description = req.body.description;
+    if (req.body.category) updateData.category = req.body.category;
+    if (req.body.brand) updateData.brand = req.body.brand;
+    if (req.body.price !== undefined) updateData.price = req.body.price;
+    if (req.body.condition) updateData.condition = req.body.condition;
+    if (req.body.image) updateData.image = unescapeUrl(req.body.image);
+    if (Array.isArray(req.body.images)) updateData.images = req.body.images.map(unescapeUrl);
+    if (req.body.stock !== undefined) updateData.stock = req.body.stock;
+    if (req.body.status) updateData.status = req.body.status;
+    if (req.body.sku) updateData.sku = req.body.sku;
+
+    const product = await updateProduct(req.params.id, updateData);
     if (!product) {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
@@ -183,8 +177,15 @@ router.delete('/:id', authenticateAdmin, requireTwoFactor, async (req, res) => {
 // Get unique categories from products. Public endpoint for dropdown population.
 router.get('/categories/unique', async (req, res) => {
   try {
+    const cached = cache.get('products:categories:unique');
+    if (cached) {
+      return res.json(cached);
+    }
+
     const categories = await Product.distinct('category', { status: 'Active' });
-    res.json({ success: true, data: categories.sort() });
+    const result = { success: true, data: categories.sort() };
+    cache.set('products:categories:unique', result, 5 * 60 * 1000);
+    res.json(result);
   } catch (error) {
     serverError(res, error);
   }
@@ -193,8 +194,15 @@ router.get('/categories/unique', async (req, res) => {
 // Get unique brands from products. Public endpoint for dropdown population.
 router.get('/brands/unique', async (req, res) => {
   try {
+    const cached = cache.get('products:brands:unique');
+    if (cached) {
+      return res.json(cached);
+    }
+
     const brands = await Product.distinct('brand', { status: 'Active' });
-    res.json({ success: true, data: brands.sort() });
+    const result = { success: true, data: brands.sort() };
+    cache.set('products:brands:unique', result, 5 * 60 * 1000);
+    res.json(result);
   } catch (error) {
     serverError(res, error);
   }

@@ -1,9 +1,8 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
 const { body } = require('express-validator');
 const validate = require('../middleware/validate');
 const { authenticateAdmin } = require('../middleware/auth');
-const { serverError, badRequest } = require('../utils/response');
+const { serverError } = require('../utils/response');
 const Settings = require('../models/Settings');
 const User = require('../models/User');
 
@@ -45,10 +44,11 @@ router.put('/', authenticateAdmin, passwordValidation, validate, async (req, res
           return res.json({ success: true, message: 'Cache cleared successfully' });
         case 'export-data':
           return res.json({ success: true, message: 'Data exported successfully' });
-        case 'reset-system':
+         case 'reset-system': {
           await Settings.deleteMany({});
           const fresh = await Settings.create({});
           return res.json({ success: true, message: 'System reset to defaults', settings: fresh });
+        }
         default:
           return res.status(400).json({ success: false, message: 'Unknown action' });
       }

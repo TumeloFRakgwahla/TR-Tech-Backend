@@ -1,33 +1,64 @@
 const Product = require('../models/Product');
+const cache = require('../utils/cache');
 
-// Creates a new product document in the database.
+// Maps sort query param values to Mongoose sort objects.
+const SORT_MAP = {
+  featured: { createdAt: -1 },
+  newest: { createdAt: -1 },
+  'price-asc': { price: 1 },
+  'price-desc': { price: -1 },
+  rating: { rating: -1 },
+};
+
+const CACHE_TTL_MS = 5 * 60 * 1000;
+
 const createProduct = async (productData) => {
+  cache.delete('products:list');
   return Product.create(productData);
 };
 
-// Retrieves a paginated list of products matching the given query filter.
-// Sorts by newest first (createdAt descending).
-const getProducts = async (query = {}, page = 1, limit = 20) => {
+const getProducts = async (query = {}, page = 1, limit = 20, sort = 'newest') => {
+  if (Object.keys(query).length === 0 && !page && !limit) {
+    const cached = cache.get('products:list');
+    if (cached) return cached;
+  }
+
   const skip = (Math.max(1, parseInt(page, 10) || 1) - 1) * limit;
+  const sortOption = SORT_MAP[sort] || SORT_MAP.newest;
   const [products, total] = await Promise.all([
-    Product.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
+    Product.find(query).sort(sortOption).skip(skip).limit(limit),
     Product.countDocuments(query),
   ]);
-  return { products, total };
+  const result = { products, total };
+
+  if (Object.keys(query).length === 0 && !page && !limit) {
+    cache.set('products:list', result, CACHE_TTL_MS);
+  }
+
+  return result;
 };
 
-// Finds a single product by its MongoDB ObjectId.
 const getProductById = async (id) => {
-  return Product.findById(id);
+  const cacheKey = `product:${id}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  const product = await Product.findById(id);
+  if (product) {
+    cache.set(cacheKey, product, CACHE_TTL_MS);
+  }
+  return product;
 };
 
-// Updates a product by ID. runValidators: true ensures schema validation runs on updates.
 const updateProduct = async (id, updateData) => {
+  cache.delete(`product:${id}`);
+  cache.delete('products:list');
   return Product.findByIdAndUpdate(id, updateData, { new: true, runValidators: true });
 };
 
-// Permanently deletes a product by ID.
 const deleteProduct = async (id) => {
+  cache.delete(`product:${id}`);
+  cache.delete('products:list');
   return Product.findByIdAndDelete(id);
 };
 

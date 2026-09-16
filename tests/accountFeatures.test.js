@@ -4,7 +4,6 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
-const PaymentMethod = require('../models/PaymentMethod');
 
 const loginAndGetCookie = async (email, password) => {
   const res = await request(app).post('/api/v1/auth/login').send({ email, password });
@@ -101,7 +100,7 @@ describe('Account features', () => {
 
   describe('Email verification gate', () => {
     it('blocks an unverified authenticated user from creating an order', async () => {
-      const user = await User.create({ firstName: 'G', lastName: 'U', email: 'gate@test.com', password: 'password123', phone: '1', emailVerified: false });
+       await User.create({ firstName: 'G', lastName: 'U', email: 'gate@test.com', password: 'password123', phone: '1', emailVerified: false });
       const cookie = await loginAndGetCookie('gate@test.com', 'password123');
       const product = await Product.create({ name: 'G', description: 'd', category: 'Smartphones', price: 10, condition: 'New', stock: 5, status: 'Active' });
 
@@ -120,7 +119,7 @@ describe('Account features', () => {
     });
 
     it('allows a verified authenticated user to create an order', async () => {
-      const user = await User.create({ firstName: 'V', lastName: 'U', email: 'vgate@test.com', password: 'password123', phone: '1', emailVerified: true });
+       await User.create({ firstName: 'V', lastName: 'U', email: 'vgate@test.com', password: 'password123', phone: '1', emailVerified: true });
       const cookie = await loginAndGetCookie('vgate@test.com', 'password123');
       const product = await Product.create({ name: 'V', description: 'd', category: 'Smartphones', price: 10, condition: 'New', stock: 5, status: 'Active' });
 
@@ -178,7 +177,7 @@ describe('Account features', () => {
 
   describe('Saved payment methods (PCI tokenization)', () => {
     it('stores only tokenized metadata, never raw card data', async () => {
-      const user = await User.create({ firstName: 'P', lastName: 'M', email: 'pay@test.com', password: 'password123', phone: '1', emailVerified: true });
+       await User.create({ firstName: 'P', lastName: 'M', email: 'pay@test.com', password: 'password123', phone: '1', emailVerified: true });
       const cookie = await loginAndGetCookie('pay@test.com', 'password123');
 
       const add = await request(app)
@@ -196,7 +195,7 @@ describe('Account features', () => {
       expect(list.body.data.length).toBe(1);
 
       // A different user cannot see or delete the first user's method.
-      const other = await User.create({ firstName: 'P2', lastName: 'M2', email: 'pay2@test.com', password: 'password123', phone: '1', emailVerified: true });
+       await User.create({ firstName: 'P2', lastName: 'M2', email: 'pay2@test.com', password: 'password123', phone: '1', emailVerified: true });
       const otherCookie = await loginAndGetCookie('pay2@test.com', 'password123');
       const otherList = await request(app).get('/api/v1/payment-methods').set('Cookie', otherCookie);
       expect(otherList.body.data.length).toBe(0);
@@ -213,7 +212,7 @@ describe('Account features', () => {
     });
 
     it('rejects an invalid gateway', async () => {
-      const user = await User.create({ firstName: 'P3', lastName: 'M3', email: 'pay3@test.com', password: 'password123', phone: '1', emailVerified: true });
+       await User.create({ firstName: 'P3', lastName: 'M3', email: 'pay3@test.com', password: 'password123', phone: '1', emailVerified: true });
       const cookie = await loginAndGetCookie('pay3@test.com', 'password123');
       const res = await request(app)
         .post('/api/v1/payment-methods')

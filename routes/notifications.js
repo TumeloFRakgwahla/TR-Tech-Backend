@@ -4,7 +4,7 @@ const validate = require('../middleware/validate');
 const { authenticate, authenticateAdmin } = require('../middleware/auth');
 const { serverError } = require('../utils/response');
 const { sendPaginated } = require('../utils/pagination');
-const { toSafeString, escapeRegex } = require('../utils/query');
+const { toSafeString } = require('../utils/query');
 const Notification = require('../models/Notification');
 
 const router = express.Router();

@@ -34,7 +34,8 @@ const orderItemValidation = [
 
 const orderUpdateValidation = [
   body('status').optional().isIn(['Pending', 'Confirmed', 'Processing', 'Shipped', 'Delivered', 'Completed', 'Cancelled']).withMessage('Invalid status'),
-  body('paymentStatus').optional().isIn(['Pending', 'Paid', 'Refunded']).withMessage('Invalid payment status')
+  body('paymentStatus').optional().isIn(['Pending', 'Paid', 'Refunded']).withMessage('Invalid payment status'),
+  body('notes').optional().isLength({ max: 500 }).withMessage('Notes cannot exceed 500 characters')
 ];
 
 // Aggregation pipeline for order statistics.
@@ -69,7 +70,6 @@ router.get('/my-orders', optionalAuthenticate, async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const limitNum = Math.min(100, Math.max(1, parseInt(limit, 10) || 20));
-    const skip = (pageNum - 1) * limitNum;
 
     const { orders, total } = await getOrders({ userId: req.user._id }, pageNum, limitNum);
 
@@ -198,7 +198,26 @@ router.get('/track', trackLimiter, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Order not found' });
     }
 
-    res.json({ success: true, data: order });
+    res.json({
+      success: true,
+      data: {
+        _id: order._id,
+        status: order.status,
+        paymentMethod: order.paymentMethod,
+        paymentStatus: order.paymentStatus,
+        totalAmount: order.totalAmount,
+        createdAt: order.createdAt,
+        updatedAt: order.updatedAt,
+        customerName: order.customer.name,
+        customerPhone: order.customer.phone,
+        items: order.items.map(item => ({
+          name: item.name,
+          condition: item.condition,
+          price: item.price,
+          quantity: item.quantity,
+        })),
+      },
+    });
   } catch (error) {
     if (error.name === 'CastError') {
       return res.status(400).json({ success: false, message: 'Invalid order ID format' });
@@ -253,8 +272,17 @@ router.post('/', optionalAuthenticate, requireEmailVerified, orderItemValidation
         }
       }
 
+      // Fetch product prices from DB for accurate coupon validation (prevents client manipulation)
+      const dbProducts = await Product.find({ _id: { $in: productIds } });
+      const priceMap = new Map(dbProducts.map(p => [String(p._id), p.price]));
+
       for (const item of items) {
-        computedTotal += (item.price || 0) * (item.quantity || 0);
+        const productId = typeof item.product === 'object' ? item.product._id || item.product : item.product;
+        const dbPrice = priceMap.get(String(productId));
+        if (dbPrice === undefined) {
+          return res.status(400).json({ success: false, message: `Product not found: ${productId}` });
+        }
+        computedTotal += dbPrice * (item.quantity || 0);
       }
       if (computedTotal < couponDoc.minOrder) {
         return res.status(400).json({ success: false, message: `Minimum order of R${couponDoc.minOrder} required` });

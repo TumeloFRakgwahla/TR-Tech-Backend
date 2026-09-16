@@ -25,7 +25,8 @@ const contactSchema = new mongoose.Schema({
   },
   phone: {
     type: String,
-    required: [true, 'Phone number is required']
+    trim: true,
+    default: ''
   },
   subject: {
     type: String,

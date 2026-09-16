@@ -47,7 +47,7 @@ const supportTicketSchema = new mongoose.Schema({
   ]
 });
 
-supportTicketSchema.pre('save', async function(next) {
+supportTicketSchema.pre('save', async function() {
   if (!this.ticketNumber) {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let unique = false;
@@ -58,7 +58,6 @@ supportTicketSchema.pre('save', async function(next) {
       if (!existing) unique = true;
     }
   }
-  next();
 });
 
 module.exports = mongoose.model('SupportTicket', supportTicketSchema);

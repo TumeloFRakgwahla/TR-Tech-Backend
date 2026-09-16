@@ -1,7 +1,5 @@
 const request = require('supertest');
 const app = require('../app');
-const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Session = require('../models/Session');
@@ -92,9 +90,9 @@ describe('Security', () => {
 
   describe('Session revocation', () => {
     it('rejects a token after logout', async () => {
-      const user = await User.create({
-        firstName: 'E', lastName: 'F', email: 'e@test.com', password: 'password123', phone: '1', role: 'customer',
-      });
+       await User.create({
+         firstName: 'E', lastName: 'F', email: 'e@test.com', password: 'password123', phone: '1', role: 'customer',
+       });
 
       // Simulate a real login: issue a session-backed token via the auth flow.
       const loginRes = await request(app)

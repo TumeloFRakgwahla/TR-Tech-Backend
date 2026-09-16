@@ -5,7 +5,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
-const { createAuthLimiter, createApiLimiter, createPublicLimiter } = require('./middleware/rateLimiter');
+const compression = require('compression');
+const { createApiLimiter } = require('./middleware/rateLimiter');
 const sanitize = require('./middleware/sanitize');
 const requestId = require('./middleware/requestId');
 const { logActivity } = require('./middleware/auditLog');
@@ -111,6 +112,7 @@ app.use((req, res, next) => {
 });
 app.use(cookieParser());
 app.use(sanitize);
+app.use(compression());
 
 // Serve local uploads for both development and production.
 // New uploads may go to Vercel Blob (when BLOB_READ_WRITE_TOKEN is set),
@@ -121,11 +123,13 @@ app.use('/uploads', (req, res, next) => {
   res.header('Access-Control-Allow-Headers', 'Content-Type');
   res.header('Access-Control-Allow-Credentials', 'true');
   res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.header('Cache-Control', 'public, max-age=31536000, immutable');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
-}, express.static(path.join(__dirname, 'uploads')));
+}, express.static(path.join(__dirname, 'uploads')
+));
 
 // CSRF endpoint: generates a random token, stores it in an HTTP-only cookie, and returns it
 // to the client. The client must send this token back in the X-CSRF-Token header for
@@ -164,7 +168,7 @@ registerRoutes(app);
 // Centralized error-handling middleware. Must be registered after all routes.
 // - 400/parse errors: invalid JSON payload
 // - 5xx errors: generic message in production, full stack in development
-app.use((err, req, res, next) => {
+app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
   console.error(err.stack);
   if (err.type === 'entity.parse.failed') {
     return res.status(400).json({ success: false, message: 'Invalid JSON payload' });

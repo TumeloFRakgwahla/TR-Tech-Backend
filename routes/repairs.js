@@ -42,7 +42,7 @@ router.post('/', repairLimiter, repairValidation, validate, async (req, res) => 
       issue,
       additionalInfo,
       image,
-      userId: req.body.userId || null,
+      userId: req.user ? req.user._id : null,
       status: 'New',
     });
     res.status(201).json({ success: true, data: repair });
