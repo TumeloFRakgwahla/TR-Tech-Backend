@@ -54,7 +54,8 @@ const createOrder = async (orderData) => {
     computedTotal += product.price * item.quantity;
   }
 
-  const finalTotal = Math.max(0, computedTotal - discount);
+  const shippingCost = computeShippingCost(computedTotal, orderData.customer);
+  const finalTotal = Math.max(0, computedTotal - discount + shippingCost);
 
   const order = await Order.create({
     items: validatedItems,
@@ -91,6 +92,16 @@ const getOrders = async (query = {}, page = 1, limit = 20) => {
 };
 
 // Finds a single order by ID with populated product references.
+const FREE_SHIPPING_THRESHOLD = 500;
+const SHIPPING_FEE = 50;
+const FREE_SHIPPING_CITIES = ['haenerstburg'];
+
+const computeShippingCost = (subtotal, customer) => {
+  if (subtotal >= FREE_SHIPPING_THRESHOLD || subtotal === 0) return 0;
+  if (customer?.address?.city && FREE_SHIPPING_CITIES.includes(customer.address.city.toLowerCase())) return 0;
+  return SHIPPING_FEE;
+};
+
 const getOrderById = async (id) => {
   return Order.findById(id).populate('items.product');
 };

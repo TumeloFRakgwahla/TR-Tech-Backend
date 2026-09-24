@@ -4,6 +4,15 @@ const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 let transporter;
 let transportInitialized = false;
 
+const isMailConfigured = () => {
+  const sendgridKey = process.env.SENDGRID_API_KEY ? process.env.SENDGRID_API_KEY.replace(/\s+/g, '') : undefined;
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = process.env.SMTP_PORT;
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '') : undefined;
+  return Boolean(sendgridKey || (smtpHost && smtpPort && smtpUser && smtpPass));
+};
+
 const initTransporter = () => {
   if (transportInitialized) return transporter;
   transportInitialized = true;
@@ -11,8 +20,9 @@ const initTransporter = () => {
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = process.env.SMTP_PORT;
   const smtpUser = process.env.SMTP_USER;
-  const smtpPass = process.env.SMTP_PASS;
-  const sendgridKey = process.env.SENDGRID_API_KEY;
+  const smtpPass = process.env.SMTP_PASS ? process.env.SMTP_PASS.replace(/\s+/g, '') : undefined;
+  const sendgridKey = process.env.SENDGRID_API_KEY ? process.env.SENDGRID_API_KEY.replace(/\s+/g, '') : undefined;
+  const isDev = process.env.NODE_ENV !== 'production';
 
   if (sendgridKey) {
     transporter = nodemailer.createTransport({
@@ -33,11 +43,45 @@ const initTransporter = () => {
         pass: smtpPass,
       },
     });
+  } else if (isDev) {
+    transporter = nodemailer.createTransport({
+      jsonTransport: true,
+    });
+    console.warn('[mail] No SMTP/SendGrid config found. Using JSON transport — emails will be saved to console output instead of being sent.');
   } else {
     transporter = null;
   }
+  
 
   return transporter;
+};
+
+const verifyTransport = async () => {
+  const transport = initTransporter();
+  if (!transport || transporter.transporter?.transportType === 'JSONTransport') return null;
+  try {
+    await transport.verify();
+    return true;
+  } catch (error) {
+    console.error('[mail] SMTP/transport verification failed:', error.message);
+    return false;
+  }
+};
+const logSentEmail = (label, mailOptions, result) => {
+  if (process.env.NODE_ENV !== 'production' && transporter && transporter.transporter && transporter.transporter.transportType === 'JSONTransport') {
+    console.log(`\n[mail:dev] ${label} email:`);
+    console.log(`  To: ${mailOptions.to}`);
+    console.log(`  Subject: ${mailOptions.subject}`);
+    if (mailOptions.html) {
+      const urlMatch = mailOptions.html.match(/href="([^"]+)"/);
+      if (urlMatch) console.log(`  Verification URL: ${urlMatch[1]}`);
+    }
+    if (mailOptions.text) {
+      const urlMatch = mailOptions.text.match(/https?:\/\/[^\s]+/);
+      if (urlMatch) console.log(`  Verification URL: ${urlMatch[0]}`);
+    }
+    console.log('');
+  }
 };
 
 const getFromAddress = () => {
@@ -47,7 +91,7 @@ const getFromAddress = () => {
 const sendVerificationEmail = async (toEmail, name, verificationToken) => {
   const transport = initTransporter();
   if (!transport) {
-    console.warn('[mail] No SMTP/SendGrid config — skipping verification email to', toEmail);
+    console.warn(`[mail] No SMTP/SendGrid config — skipping verification email to ${toEmail}. Configure SMTP or SendGrid to enable email sending.`);
     return null;
   }
 
@@ -74,7 +118,9 @@ const sendVerificationEmail = async (toEmail, name, verificationToken) => {
   };
 
   try {
-    return await transport.sendMail(mailOptions);
+    const result = await transport.sendMail(mailOptions);
+    logSentEmail('verification', mailOptions, result);
+    return result;
   } catch (error) {
     console.error('[mail] Failed to send verification email to', toEmail, error.message);
     return null;
@@ -84,7 +130,7 @@ const sendVerificationEmail = async (toEmail, name, verificationToken) => {
 const sendPasswordResetEmail = async (toEmail, name, resetToken) => {
   const transport = initTransporter();
   if (!transport) {
-    console.warn('[mail] No SMTP/SendGrid config — skipping password reset email to', toEmail);
+    console.warn(`[mail] No SMTP/SendGrid config — skipping password reset email to ${toEmail}. Configure SMTP or SendGrid to enable email sending.`);
     return null;
   }
 
@@ -109,7 +155,14 @@ const sendPasswordResetEmail = async (toEmail, name, resetToken) => {
     text: `Hello ${name || 'there'},\n\nClick the link below to reset your password (expires in 15 minutes):\n\n${resetUrl}\n\nIf you did not request a password reset, you can safely ignore this email.`,
   };
 
-  return await transport.sendMail(mailOptions);
+  try {
+    const result = await transport.sendMail(mailOptions);
+    logSentEmail('password-reset', mailOptions, result);
+    return result;
+  } catch (error) {
+    console.error('[mail] Failed to send password reset email to', toEmail, error.message);
+    return null;
+  }
 };
 
 const sendAdminAlert = async (subject, text, html) => {
@@ -122,19 +175,30 @@ const sendAdminAlert = async (subject, text, html) => {
   const from = getFromAddress();
   const adminEmail = process.env.ADMIN_EMAIL || getFromAddress();
 
-  return await transport.sendMail({
+  const mailOptions = {
     from,
     to: adminEmail,
     subject,
     text,
-    html,
-  });
+    html: html || text,
+  };
+
+  try {
+    const result = await transport.sendMail(mailOptions);
+    logSentEmail('admin-alert', mailOptions, result);
+    return result;
+  } catch (error) {
+    console.error('[mail] Failed to send admin alert:', error.message);
+    return null;
+  }
 };
 
 module.exports = {
   nodemailer,
   initTransporter,
+  isMailConfigured,
   sendVerificationEmail,
   sendPasswordResetEmail,
   sendAdminAlert,
+  verifyTransport,
 };
