@@ -173,7 +173,7 @@ router.get('/', authenticateAdmin, async (req, res) => {
   }
 });
 
-// Public order tracking by order ID or customer phone number.
+// Public order tracking by order ID, order number, or customer phone number.
 // No authentication required so WhatsApp customers can track their orders.
 // Must be defined before /:id to avoid Express matching 'track' as a route parameter.
 router.get('/track', trackLimiter, async (req, res) => {
@@ -185,12 +185,22 @@ router.get('/track', trackLimiter, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Please provide an order ID or phone number' });
     }
 
+    // The tracker accepts either a 24-character ObjectId or a short
+    // order number (e.g. TR-000123), so customers can use whichever
+    // appears in their confirmation. Anything else is rejected.
+    const isObjectId = /^[a-fA-F0-9]{24}$/.test(orderId || '');
+    const isOrderNumber = /^TR-\d{6}$/i.test(orderId || '');
+    if (orderId && !isObjectId && !isOrderNumber) {
+      return res.status(400).json({ success: false, message: 'Invalid order ID format' });
+    }
     let query = {};
     if (orderId) {
-      query._id = orderId;
+      query = isObjectId
+        ? { _id: orderId }
+        : { orderNumber: orderId.toUpperCase() };
     }
     if (phone) {
-      query['customer.phone'] = phone;
+      query = { ...query, 'customer.phone': phone };
     }
 
     const order = await Order.findOne(query).populate('items.product');
@@ -202,6 +212,7 @@ router.get('/track', trackLimiter, async (req, res) => {
       success: true,
       data: {
         _id: order._id,
+        orderNumber: order.orderNumber,
         status: order.status,
         paymentMethod: order.paymentMethod,
         paymentStatus: order.paymentStatus,
@@ -343,7 +354,7 @@ router.put('/:id', authenticateAdmin, requireTwoFactor, orderUpdateValidation, v
           userId: order.userId,
           type: 'order',
           title: 'Order Cancelled',
-          message: `Order #${String(order._id).slice(-6).toUpperCase()} has been cancelled.`,
+          message: `Order #${order.orderNumber || String(order._id).slice(-6).toUpperCase()} has been cancelled.`,
           data: { orderId: order._id, status: 'Cancelled' },
         });
       }
@@ -358,7 +369,7 @@ router.put('/:id', authenticateAdmin, requireTwoFactor, orderUpdateValidation, v
           userId: order.userId,
           type: 'order',
           title: 'Payment Refunded',
-          message: `Payment for order #${String(order._id).slice(-6).toUpperCase()} has been refunded.`,
+          message: `Payment for order #${order.orderNumber || String(order._id).slice(-6).toUpperCase()} has been refunded.`,
           data: { orderId: order._id, paymentStatus: 'Refunded' },
         });
       }
@@ -370,7 +381,7 @@ router.put('/:id', authenticateAdmin, requireTwoFactor, orderUpdateValidation, v
           userId: order.userId,
           type: 'order',
           title: 'Order Status Updated',
-          message: `Order #${String(order._id).slice(-6).toUpperCase()} is now ${status}.`,
+          message: `Order #${order.orderNumber || String(order._id).slice(-6).toUpperCase()} is now ${status}.`,
           data: { orderId: order._id, status },
         });
       }

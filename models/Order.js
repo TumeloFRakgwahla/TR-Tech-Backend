@@ -62,6 +62,18 @@ const orderSchema = new mongoose.Schema({
     index: true
   },
   items: [orderItemSchema],
+  /**
+   * Human-readable order number (e.g. TR-000123), shown to customers
+   * instead of the 24-character ObjectId. Assigned from a monotonic
+   * server-side counter at creation time. Optional and sparse so
+   * pre-existing orders (which have none) remain valid.
+   */
+  orderNumber: {
+    type: String,
+    index: true,
+    unique: true,
+    sparse: true,
+  },
   totalAmount: {
     type: Number,
     required: [true, 'Total amount is required'],

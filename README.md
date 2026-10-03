@@ -157,6 +157,7 @@ tr-tech-backend/
 ├── package.json
 ├── jest.config.js
 ├── Dockerfile
+├── docker-compose.yml
 ├── .env.example
 └── README.md
 ```
@@ -443,6 +444,25 @@ Build and run with Docker:
 docker build -t tr-tech-backend .
 docker run -p 5000:5000 --env-file .env tr-tech-backend
 ```
+
+Or via compose, which also starts MongoDB and waits for it to pass its healthcheck:
+
+```bash
+docker compose up --build
+```
+
+Notes:
+
+- The compose backend overrides `MONGODB_URI` with `mongodb://mongodb:27017/tr-tech` so it
+  connects to the `mongodb` service it depends on. The `MONGODB_URI` in `.env` targets
+  MongoDB Atlas, which would leave that service unused — remove the override line to run the
+  container against Atlas instead.
+- Everything else is loaded from `.env` via `env_file`, so keep that file populated.
+- The network is pinned to `tr-tech-network` so the `tr-tech-frontend` stack can join it and
+  resolve the backend. Compose may warn that the network was not created by this project
+  when the frontend stack claims the name first; that is expected.
+- The backend carries the network alias `backend`, which is the hostname `nginx.conf` in
+  `tr-tech-frontend` proxies to.
 
 ## License
 
