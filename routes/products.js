@@ -58,6 +58,7 @@ router.get('/low-stock', authenticateAdmin, async (req, res) => {
 
 // List products with optional filtering, search, and pagination.
 // Public endpoint so the shop page can browse the catalog.
+// Supports comma-separated category/brand params for multi-selection filtering.
 router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 20, sort = 'newest' } = req.query;
@@ -67,9 +68,21 @@ router.get('/', async (req, res) => {
     const brand = toSafeString(req.query.brand);
     const status = toSafeString(req.query.status);
     const search = toSafeString(req.query.search);
+    const inStock = toSafeString(req.query.inStock);
+    const maxPrice = toSafeString(req.query.maxPrice);
+    const minRating = toSafeString(req.query.minRating);
+    const onSale = toSafeString(req.query.onSale);
+    const newArrivals = toSafeString(req.query.newArrivals);
 
-    if (category) query.category = category;
-    if (brand) query.brand = brand;
+    // Support multiple categories/brands via comma-separated values
+    if (category) {
+      const cats = category.split(',').map(c => c.trim()).filter(Boolean);
+      query.category = cats.length === 1 ? cats[0] : { $in: cats };
+    }
+    if (brand) {
+      const brands = brand.split(',').map(b => b.trim()).filter(Boolean);
+      query.brand = brands.length === 1 ? brands[0] : { $in: brands };
+    }
     if (status) query.status = status;
     if (search) {
       const safeSearch = escapeRegex(search);
@@ -78,6 +91,30 @@ router.get('/', async (req, res) => {
         { description: { $regex: safeSearch, $options: 'i' } },
         { sku: { $regex: safeSearch, $options: 'i' } }
       ];
+    }
+    if (inStock === 'true') {
+      query.stock = { $gt: 0 };
+    }
+    if (maxPrice) {
+      const max = parseFloat(maxPrice);
+      if (!isNaN(max)) {
+        query.$and = query.$and || [];
+        query.$and.push({ price: { $lte: max } });
+      }
+    }
+    if (minRating) {
+      const minR = parseInt(minRating, 10);
+      if (!isNaN(minR)) {
+        query.$and = query.$and || [];
+        query.$and.push({ rating: { $gte: minR } });
+      }
+    }
+    if (onSale === 'true') {
+      query.$and = query.$and || [];
+      query.$and.push({ $expr: { $gt: [{ $ifNull: ['$originalPrice', 0] }, '$price'] } });
+    }
+    if (newArrivals === 'true') {
+      query.isNew = true;
     }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
