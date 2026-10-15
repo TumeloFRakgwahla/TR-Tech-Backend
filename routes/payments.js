@@ -99,12 +99,15 @@ router.post(
       });
     } catch (error) {
       if (error.paystackResponse) {
-        return res.status(error.status || 400).json({
+        const clientError = error.status === 401 || error.status === 403
+          ? 502
+          : (error.status || 400);
+        return res.status(clientError).json({
           success: false,
           message: error.message,
         });
       }
-      serverError(res, error);
+       serverError(res, error);
     }
   }
 );
@@ -180,7 +183,10 @@ router.post(
       });
     } catch (error) {
       if (error.paystackResponse) {
-        return res.status(error.status || 400).json({
+        const clientError = error.status === 401 || error.status === 403
+          ? 502
+          : (error.status || 400);
+        return res.status(clientError).json({
           success: false,
           message: error.message,
         });

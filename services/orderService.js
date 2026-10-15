@@ -1,6 +1,43 @@
 const Order = require('../models/Order');
 const Product = require('../models/Product');
 
+const ORDER_NUMBER_PREFIX = 'TR-';
+const ORDER_NUMBER_PAD = 6;
+
+/**
+ * Returns the next value from a named, atomic server-side counter.
+ *
+ * Uses the driver's native `counters` collection with an upserting
+ * `$inc`, which is atomic in MongoDB, so two concurrent orders can
+ * never be assigned the same sequence number. The counter document
+ * is created on first use, so no migration or seed is required.
+ */
+const getNextSequence = async (name) => {
+  const counters = Order.db.collection('counters');
+  const result = await counters.findOneAndUpdate(
+    { _id: name },
+    { $inc: { seq: 1 } },
+    { upsert: true, returnDocument: 'after' }
+  );
+  return result.seq;
+};
+
+/**
+ * Builds a short, customer-facing order number such as `TR-000123`.
+ * Retries once if the generated number ever collides with an existing
+ * order (possible only if the unique index was rebuilt or seeded).
+ */
+const generateOrderNumber = async () => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const seq = await getNextSequence('orderNumber');
+    const candidate = `${ORDER_NUMBER_PREFIX}${String(seq).padStart(ORDER_NUMBER_PAD, '0')}`;
+    const exists = await Order.findOne({ orderNumber: candidate }, { _id: 1 }).lean();
+    if (!exists) return candidate;
+  }
+  // Practically unreachable: fall back to a timestamp-suffixed number.
+  return `${ORDER_NUMBER_PREFIX}${Date.now().toString(36).toUpperCase()}`;
+};
+
 // Rolls back stock reservations for a list of product/quantity pairs.
 // Used when order creation fails partway through to prevent stock from being permanently deducted.
 const rollbackStock = async (reserved) => {
@@ -54,9 +91,11 @@ const createOrder = async (orderData) => {
     computedTotal += product.price * item.quantity;
   }
 
-  const finalTotal = Math.max(0, computedTotal - discount);
+  const shippingCost = computeShippingCost(computedTotal, orderData.customer);
+  const finalTotal = Math.max(0, computedTotal - discount + shippingCost);
 
   const order = await Order.create({
+    orderNumber: await generateOrderNumber(),
     items: validatedItems,
     customer: orderData.customer,
     userId: orderData.userId,
@@ -91,6 +130,16 @@ const getOrders = async (query = {}, page = 1, limit = 20) => {
 };
 
 // Finds a single order by ID with populated product references.
+const FREE_SHIPPING_THRESHOLD = 500;
+const SHIPPING_FEE = 50;
+const FREE_SHIPPING_CITIES = ['haenerstburg'];
+
+const computeShippingCost = (subtotal, customer) => {
+  if (subtotal >= FREE_SHIPPING_THRESHOLD || subtotal === 0) return 0;
+  if (customer?.address?.city && FREE_SHIPPING_CITIES.includes(customer.address.city.toLowerCase())) return 0;
+  return SHIPPING_FEE;
+};
+
 const getOrderById = async (id) => {
   return Order.findById(id).populate('items.product');
 };

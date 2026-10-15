@@ -53,14 +53,24 @@ const routeRegistry = [
 // The Paystack webhook path is exempt from CSRF because it receives raw
 // POST payloads from Paystack's servers with HMAC-SHA512 signature validation
 // instead. The raw body parser is registered in app.js for this path.
+// The verify-email and resend-verification endpoints are exempt from CSRF
+// because they are token-based public endpoints — the verification token
+// itself acts as authentication, and users clicking email links have no
+// prior CSRF token cookie.
 const registerRoutes = (app) => {
   const isTest = process.env.NODE_ENV === 'test';
   const csrfMiddleware = isTest ? (req, res, next) => next() : csrfProtection;
+  const CSRF_EXEMPT_AUTH = ['/verify-email', '/resend-verification', '/forgot-password', '/reset-password'];
 
   routeRegistry.forEach(({ path, routes }) => {
     if (path === '/api/v1/payments') {
       app.use(path, (req, res, next) => {
         if (req.path === '/paystack/webhook') return next();
+        return csrfMiddleware(req, res, next);
+      }, routes);
+    } else if (path === '/api/v1/auth') {
+      app.use(path, (req, res, next) => {
+        if (CSRF_EXEMPT_AUTH.some((exempt) => req.path === exempt || req.path.startsWith(exempt))) return next();
         return csrfMiddleware(req, res, next);
       }, routes);
     } else {

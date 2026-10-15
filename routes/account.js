@@ -19,7 +19,7 @@ const addressValidation = [
 ];
 
 // Get the authenticated user's profile data.
-router.get('/profile', authenticate, requireEmailVerified, async (req, res) => {
+router.get('/profile', authenticate, async (req, res) => {
   try {
     res.json({
       success: true,
@@ -105,7 +105,7 @@ router.put('/password', authenticate, requireEmailVerified, [
 
 // Addresses
 // Get all addresses for the authenticated user, sorted by default first.
-router.get('/addresses', authenticate, requireEmailVerified, async (req, res) => {
+router.get('/addresses', authenticate, async (req, res) => {
   try {
     const addresses = await Address.find({ userId: req.user._id }).sort({ isDefault: -1, createdAt: -1 });
     res.json({ success: true, data: addresses });
@@ -183,7 +183,7 @@ router.post('/addresses/:id/default', authenticate, requireEmailVerified, async 
 
 // Notifications
 // Get notification preferences and unread count for the authenticated user.
-router.get('/notifications', authenticate, requireEmailVerified, async (req, res) => {
+router.get('/notifications', authenticate, async (req, res) => {
   try {
     const preferences = req.user.notificationPreferences || {
       emailOrderUpdates: true,
@@ -249,7 +249,7 @@ router.put('/notifications', authenticate, requireEmailVerified, [
 
 // Sessions
 // List all active sessions for the authenticated user.
-router.get('/sessions', authenticate, requireEmailVerified, async (req, res) => {
+router.get('/sessions', authenticate, async (req, res) => {
   try {
     const sessions = await Session.find({ userId: req.user._id, isActive: true })
       .sort({ lastActive: -1 });

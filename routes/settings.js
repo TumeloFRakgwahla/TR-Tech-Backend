@@ -21,8 +21,16 @@ router.get('/', authenticateAdmin, async (req, res) => {
 });
 
 const passwordValidation = [
-  body('password.currentPassword').notEmpty().withMessage('Current password is required'),
-  body('password.newPassword').isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
+  // The password chain only applies when the client actually intends to
+  // change the password. Without `checkIf`, these rules run on every PUT
+  // and a plain settings save (no `password` field) is rejected with
+  // "Current password is required", making the page impossible to save.
+  body('password.currentPassword')
+    .if(body('password').exists({ checkNull: true, checkFalsy: false }))
+    .notEmpty().withMessage('Current password is required'),
+  body('password.newPassword')
+    .if(body('password').exists({ checkNull: true, checkFalsy: false }))
+    .isLength({ min: 8 }).withMessage('Password must be at least 8 characters')
     .matches(/^(?=.*[a-zA-Z])(?=.*\d).+$/).withMessage('Password must contain both letters and numbers'),
 ];
 

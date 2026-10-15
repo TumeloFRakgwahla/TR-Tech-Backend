@@ -10,7 +10,7 @@ const Settings = require('../models/Settings');
 const Session = require('../models/Session');
 const { authenticate, authenticateAdmin } = require('../middleware/auth');
 const { createAuthLimiter } = require('../middleware/rateLimiter');
-const { sendVerificationEmail, sendPasswordResetEmail } = require('../utils/mail');
+const { sendVerificationEmail, sendPasswordResetEmail, isMailConfigured } = require('../utils/mail');
 const { serverError } = require('../utils/response');
 
 const router = express.Router();
@@ -114,18 +114,27 @@ router.post('/register', authLimiter, [
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
-    res.status(201).json({
+    const response = {
       success: true,
+      requiresEmailVerification: !user.emailVerified,
       user: {
         id: user._id,
         firstName: user.firstName,
         lastName: user.lastName,
         email: user.email,
         phone: user.phone,
-        role: user.role,
-        emailVerified: user.emailVerified
-      }
-    });
+        address: user.address,
+         role: user.role,
+         twoFactorEnabled: user.twoFactorEnabled,
+         emailVerified: user.emailVerified
+       }
+    };
+
+    if (process.env.NODE_ENV !== 'production' && !isMailConfigured()) {
+      response.verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+    }
+
+    res.status(201).json(response);
   } catch (error) {
     console.error('Register error:', error);
     res.status(500).json({
@@ -216,7 +225,8 @@ router.post('/login', authLimiter, [
         phone: user.phone,
         address: user.address,
         role: user.role,
-        twoFactorEnabled: user.twoFactorEnabled
+        twoFactorEnabled: user.twoFactorEnabled,
+        emailVerified: user.emailVerified,
       }
     });
   } catch (error) {
@@ -374,8 +384,9 @@ router.get('/me', authenticate, async (req, res) => {
       email: req.user.email,
       phone: req.user.phone,
       address: req.user.address,
-      role: req.user.role,
-      twoFactorEnabled: req.user.twoFactorEnabled
+       role: req.user.role,
+       twoFactorEnabled: req.user.twoFactorEnabled,
+       emailVerified: req.user.emailVerified
     }
   });
 });
@@ -466,17 +477,29 @@ router.post('/verify-email', [
 router.post('/resend-verification', [
   body('email').isEmail().withMessage('Valid email is required').normalizeEmail(),
 ], validate, async (req, res) => {
-  try {
+   try {
     const user = await User.findOne({ email: req.body.email });
     if (!user || user.emailVerified) {
       return res.json({ success: true, message: 'If that email exists and is unverified, a verification link has been sent' });
     }
     const verificationToken = user.generateEmailVerificationToken();
     await user.save();
-    sendVerificationEmail(user.email, `${user.firstName} ${user.lastName}`, verificationToken).catch((err) => {
+    const mailResult = await sendVerificationEmail(user.email, `${user.firstName} ${user.lastName}`, verificationToken).catch((err) => {
       console.error('Failed to send verification email:', err);
+      return null;
     });
-    res.json({ success: true, message: 'If that email exists and is unverified, a verification link has been sent' });
+
+    const response = { success: true, message: 'If that email exists and is unverified, a verification link has been sent' };
+
+    if (process.env.NODE_ENV !== 'production' && (!mailResult || mailResult === null) && !isMailConfigured()) {
+      response.verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email?token=${verificationToken}`;
+    }
+
+    if (mailResult === null && process.env.NODE_ENV !== 'production' && isMailConfigured()) {
+      response.warning = 'Email could not be sent. Check server logs for details.';
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Resend verification error:', error);
     res.status(500).json({ success: false, message: 'Server error resending verification' });

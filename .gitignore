@@ -46,6 +46,11 @@ coverage/
 .temp/
 .tmp/
 
+# Uploads and build artifacts
+uploads/
+frontend-build/
+
+
 # Misc
 *.pem
 *.key

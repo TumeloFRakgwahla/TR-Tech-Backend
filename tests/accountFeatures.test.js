@@ -149,7 +149,7 @@ describe('Account features', () => {
       expect(res.body.requiresEmailVerification).toBe(true);
     });
 
-    it('blocks an unverified authenticated user from account profile', async () => {
+    it('allows an unverified authenticated user to read account profile (write operations still gated)', async () => {
       await User.create({ firstName: 'U', lastName: 'A', email: 'gacc@test.com', password: 'password123', phone: '1', emailVerified: false });
       const cookie = await loginAndGetCookie('gacc@test.com', 'password123');
 
@@ -157,9 +157,8 @@ describe('Account features', () => {
         .get('/api/v1/account/profile')
         .set('Cookie', cookie);
 
-      expect(res.statusCode).toEqual(403);
-      expect(res.body.success).toBe(false);
-      expect(res.body.requiresEmailVerification).toBe(true);
+      expect(res.statusCode).toEqual(200);
+      expect(res.body.success).toBe(true);
     });
 
     it('allows a verified authenticated user to access account profile', async () => {

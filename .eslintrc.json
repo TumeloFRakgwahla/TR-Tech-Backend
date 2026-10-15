@@ -6,13 +6,14 @@
   },
   "extends": "eslint:recommended",
   "parserOptions": {
-    "ecmaVersion": 2021,
+    "ecmaVersion": "latest",
     "sourceType": "script"
   },
   "rules": {
     "no-unused-vars": ["error", { "argsIgnorePattern": "^_" }],
-    "no-undef": "error",
-    "no-console": "off"
+    "no-console": "warn",
+    "prefer-const": "error",
+    "no-var": "error"
   },
-  "ignorePatterns": ["node_modules/", "frontend-build/", "uploads/", "dist/"]
+  "ignorePatterns": ["node_modules/", "uploads/", "frontend-build/", "coverage/", "*.log"]
 }

@@ -13,12 +13,20 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=5000
+      # Point the container at the mongodb service below. The MONGODB_URI in .env
+      # targets Atlas, which would leave the mongodb service unused. Drop this
+      # line to run the container against Atlas instead.
+      - MONGODB_URI=mongodb://mongodb:27017/tr-tech
     depends_on:
       mongodb:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - tr-tech-network
+      tr-tech-network:
+        # nginx.conf in tr-tech-frontend proxies to the host `backend`, not to
+        # the container name tr-tech-backend.
+        aliases:
+          - backend
     healthcheck:
       test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:5000/api/health']
       interval: 30s
@@ -45,5 +53,9 @@ volumes:
   mongodb-data:
 
 networks:
+  # Pinned so the tr-tech-frontend stack can join the same network. Compose warns
+  # that the network was not created by this project when the other stack claims
+  # the name first; that warning is expected and safe.
   tr-tech-network:
+    name: tr-tech-network
     driver: bridge
