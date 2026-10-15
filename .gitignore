@@ -48,8 +48,6 @@ coverage/
 
 # Uploads and build artifacts
 uploads/
-scripts/
-tests/
 frontend-build/
 
 
